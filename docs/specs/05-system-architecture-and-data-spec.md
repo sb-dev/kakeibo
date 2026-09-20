@@ -1,12 +1,12 @@
-# Kakeibo — System Architecture and Data Spec
+# Kakeido — System Architecture and Data Spec
 
-**Version:** 1.2  
-**Date:** 2026-09-01  
+**Version:** 2  
+**Date:** 2026-09-02  
 **Status:** Canonical implementation spec
 
 ## 1. Purpose and authority
 
-This spec defines Kakeibo's runtime architecture, canonical persistence, financial-data flow, import architecture, Kei integration, first-party analytics, security and privacy boundaries.
+This spec defines Kakeido's runtime architecture, canonical persistence, financial-data flow, import architecture, Kei runtime integration, first-party analytics, security and privacy boundaries.
 
 Canonical product layering:
 
@@ -44,7 +44,8 @@ Hono API                 → application and analytics boundary
 Workflows                → durable multi-step work
 R2                       → uploaded/generated blobs
 Durable Objects          → live workflow coordination only
-AI Gateway / LLM         → bounded explanation layer
+Kei runtime             → bounded task + grounding + validated interpretation
+AI Gateway / LLM         → versioned model-routing boundary
 Better Stack / Cloudflare→ operational telemetry boundary
 ```
 
@@ -57,7 +58,7 @@ Rules:
 5. Product analytics are not the financial audit trail.
 6. Analytics are not operational observability.
 7. Product analytics never flow to Meta or another advertising platform.
-8. R2, Durable Objects and LLMs never own canonical financial truth.
+8. R2, Durable Objects, agent memory and LLMs never own canonical financial truth.
 9. Store enough financial meaning for one coherent financial model; expose only what the current UX needs.
 10. Prefer the simplest runtime that safely satisfies the use case.
 
@@ -87,7 +88,9 @@ financial domain state
 | Database | Neon Postgres |
 | DB access | Cloudflare Hyperdrive |
 | Blob storage | Cloudflare R2 |
-| LLM boundary | Cloudflare AI Gateway |
+| Kei initial runtime | Explicit bounded task execution through Kakeido application services |
+| LLM boundary | Cloudflare AI Gateway with versioned model routes |
+| Agent runtime | None initially; Cloudflare AIChatAgent / Think remain future options only |
 | Infrastructure | Terraform + Wrangler |
 | First-party product analytics | Neon Postgres |
 | First-party marketing analytics | Neon Postgres |
@@ -108,16 +111,22 @@ Do not add a third-party product-analytics platform or overlapping infrastructur
 ## 4. Runtime topology
 
 ```text
-Kakeibo Mobile
+Kakeido Mobile
       │
       ├── authenticated application commands/queries
       │          ▼
       │      Hono Worker
       │          ├── application/domain services → Hyperdrive → Neon app data
+      │          ├── Kei grounding + explicit task routing
+      │          │          ↓
+      │          │   Kei release resolver
+      │          │          ↓
+      │          │   AI Gateway route → provider/model
+      │          │          ↓
+      │          │   structured output validation
       │          ├── Workflows
       │          ├── R2
-      │          ├── Durable Object status
-      │          └── AI Gateway → LLM
+      │          └── Durable Object status
       │
       └── client-only product events
                  ▼
@@ -133,7 +142,7 @@ Application services
                  ▼
           Neon analytics schema
 
-trykakeibo.com
+trykakeido.com
 Astro / Cloudflare
       │
       ├── Cloudflare Web Analytics
@@ -188,7 +197,7 @@ infra/
 
 `financial-ingestion` owns ingestion-source adapters, parsing/synchronisation, source identity and normalisation contracts.
 
-`kei` owns provider-neutral grounding and model contracts.
+`kei` owns provider-neutral grounding, policy/persona/task contracts, output schemas, model contracts and Kei release manifests. It must not own financial-domain calculations.
 
 `analytics` owns the event taxonomy, product/marketing event contracts, event writers, Meta allowlisting/relay helpers, TimescaleDB analytics migrations and aggregate/query helpers. It must not own financial-domain semantics.
 
@@ -530,12 +539,12 @@ adjustment
 
 Do not infer movement globally from amount sign. Source adapters resolve source-specific conventions first.
 
-A provider may expose lifecycle state such as `pending` and `posted`. Preserve that source state separately from Kakeibo review state.
+A provider may expose lifecycle state such as `pending` and `posted`. Preserve that source state separately from Kakeido review state.
 
 ```text
 provider/source lifecycle
 ≠
-Kakeibo review truth
+Kakeido review truth
 ```
 
 The ingestion layer must support reconciliation when an upstream provider changes a transaction from pending to posted, changes supplied metadata, or replaces one provider record with its posted equivalent. Such updates must preserve source lineage and must not silently erase a user-reviewed interpretation.
@@ -576,17 +585,17 @@ Categories are user-extensible and use stable IDs.
 
 Merchants and tags support evidence, grouping, search and insights; neither proves financial purpose.
 
-A connected provider may supply its own transaction category, merchant enrichment, mode/type or duplicate flag. Preserve useful provider enrichment as source evidence, but do not map it directly to reviewed Kakeibo classification.
+A connected provider may supply its own transaction category, merchant enrichment, mode/type or duplicate flag. Preserve useful provider enrichment as source evidence, but do not map it directly to reviewed Kakeido classification.
 
 ```text
 provider category
 → optional preparation evidence
 
-Kakeibo rule/history + user confirmation
+Kakeido rule/history + user confirmation
 → canonical reviewed classification
 ```
 
-Kakeibo should not depend on Salt Edge categorisation to function.
+Kakeido should not depend on Salt Edge categorisation to function.
 
 ---
 
@@ -923,7 +932,7 @@ Not implied:
 
 ```text
 payment initiation
-bank transfers initiated by Kakeibo
+bank transfers initiated by Kakeido
 Salt Edge as canonical categorisation
 Salt Edge-specific financial semantics
 ```
@@ -932,7 +941,7 @@ Payment initiation requires a separate product and security decision.
 
 ### 21.2 Connection flow
 
-The mobile application must be able to start an external provider-authorisation journey and receive a safe return into Kakeibo.
+The mobile application must be able to start an external provider-authorisation journey and receive a safe return into Kakeido.
 
 Keep this capability abstract:
 
@@ -993,9 +1002,9 @@ marked duplicate upstream
 removed/replaced upstream
 ```
 
-Preserve provider lifecycle separately from Kakeibo review state.
+Preserve provider lifecycle separately from Kakeido review state.
 
-A later provider refresh may refine source data, but must not silently destroy a reviewed Kakeibo decision.
+A later provider refresh may refine source data, but must not silently destroy a reviewed Kakeido decision.
 
 Reconciliation must preserve:
 
@@ -1016,15 +1025,15 @@ Treat these as optional ingestion evidence.
 Default architectural preference:
 
 ```text
-Kakeibo deterministic rules
-+ Kakeibo reviewed history
+Kakeido deterministic rules
++ Kakeido reviewed history
 + user confirmation
-→ canonical Kakeibo classification
+→ canonical Kakeido classification
 ```
 
 Provider enrichment may improve preparation only when it proves useful.
 
-Do not couple Kakeibo category IDs or goal semantics to Salt Edge's category taxonomy.
+Do not couple Kakeido category IDs or goal semantics to Salt Edge's category taxonomy.
 
 ### 21.6 Seamless-extension criterion
 
@@ -1075,25 +1084,256 @@ Mobile must recover status through the API if the live connection disappears.
 
 ---
 
-## 23. Kei architecture
+## 23. Kei runtime architecture
+
+`03-kei-assistant-spec.md` owns what Kei may say and do.
+
+This section owns how that bounded behaviour executes.
+
+Initial architecture:
 
 ```text
-mobile / workflow
-→ Hono
-→ application service
-→ bounded canonical query
-→ grounding object
-→ Kakeibo Kei adapter
-→ AI Gateway
-→ LLM
-→ structured output
-→ validation
-→ persist when useful
+product surface / workflow
+        ↓
+Hono route
+        ↓
+application service
+        ↓
+deterministic financial/domain query
+        ↓
+Kei Grounding Builder
+        ↓
+Explicit Task Router
+        ↓
+Kei Release Resolver
+        ↓
+policy + persona + task contract + output contract
+        ↓
+Cloudflare AI Gateway
+        ↓
+versioned model route
+        ↓
+provider / model
+        ↓
+structured output
+        ↓
+schema + policy validation
+        ↓
+application response
 ```
 
-Provider-specific response types remain behind the Kakeibo adapter.
+The initial implementation is deliberately **not** a general-purpose agent runtime.
 
-Use deterministic application logic for:
+The application chooses the task, constructs the grounding and validates the result. The model supplies bounded interpretation and language.
+
+### 23.1 Deterministic task selection
+
+Kei tasks are application capabilities, not model-selected intentions.
+
+Examples:
+
+```text
+review flow
+→ Review Brief
+
+decision item
+→ Explain Decision
+
+prepared group
+→ Explain Group
+
+Looks Safe lane
+→ Explain Looks Safe
+
+completed review
+→ Weekly Summary
+
+goal detail
+→ Goal Progress Explanation
+
+reflection surface
+→ Reflection Prompt
+```
+
+Task selection occurs in deterministic application code.
+
+The model must not:
+- choose which financial workflow to enter;
+- select a canonical state transition;
+- decide to invoke another Kei task;
+- dynamically expand its authority.
+
+This implements the behavioural contract in `03`.
+
+### 23.2 `KeiGrounding`
+
+Each invocation receives one bounded task-specific grounding object.
+
+Conceptually:
+
+```text
+KeiGrounding
+├── task
+├── canonical facts required by the task
+├── deterministic calculations
+├── relevant reviewed history
+├── provisional preparation evidence where allowed
+├── evidence state
+├── relevant plan / goal state where required
+└── display-safe canonical references
+```
+
+Grounding is constructed by application services from authorised Kakeido-owned state.
+
+It is not:
+- unrestricted database access;
+- arbitrary SQL;
+- a complete account dump;
+- raw application state;
+- a retrieval mechanism over unrelated user data.
+
+Examples of task-specific grounding may include:
+
+```text
+ReviewBriefGrounding
+DecisionExplanationGrounding
+GroupExplanationGrounding
+LooksSafeExplanationGrounding
+WeeklySummaryGrounding
+GoalProgressGrounding
+ReflectionGrounding
+```
+
+Only information required for the selected task should be included.
+
+Do not automatically send:
+- raw CSV files;
+- complete account history;
+- unrelated plans or goals;
+- authentication data;
+- secrets;
+- raw logs;
+- analytics history.
+
+Merchant names, transaction descriptions, bank references, imported fields and provider labels are untrusted data. Instruction-like text inside them never changes Kei policy or task selection.
+
+### 23.3 Kei behavioural bundle
+
+Runtime behaviour is assembled from explicit version-controlled components:
+
+```text
+Kei Policy
+    +
+Kei Persona
+    +
+Task Contract
+    +
+Output Contract
+```
+
+`03` defines their behavioural meaning.
+
+The runtime must resolve those components explicitly rather than relying on an untracked prompt assembled ad hoc inside route handlers.
+
+Prompt/policy content required to define production behaviour remains version-controlled with the application.
+
+An external prompt-management UI may support experimentation or inspection, but it must not become the canonical source of production Kei behaviour.
+
+### 23.4 Kei release bundle
+
+A production Kei configuration is represented by a versioned `KeiRelease`.
+
+Conceptually:
+
+```text
+KeiRelease
+├── kei version
+├── policy version
+├── persona version
+├── task-contract versions
+├── output-schema version
+├── tool-set version
+├── skill-set version
+├── model-route reference
+└── bundle content hash
+```
+
+Example:
+
+```yaml
+kei_release: 1.4.0
+policy: 2.1.0
+persona: 1.3.0
+
+tasks:
+  review_brief: 3.2.0
+  explain_decision: 2.4.1
+  weekly_summary: 4.0.0
+  goal_progress: 1.1.0
+
+output_schema: 2.0.0
+tools: 1.2.0
+skills: none
+model_route: kei-production@7
+
+benchmark_suite: 5.2.0
+benchmark_dataset: 8.1.0
+
+bundle_sha256: "<content hash>"
+```
+
+The exact storage format is an implementation detail.
+
+The architectural requirement is that one production response can be traced to one exact behavioural bundle.
+
+Kei releases and independently versioned behavioural/evaluation components use Semantic Versioning. Version semantics and promotion policy belong to `06`.
+
+The content hash identifies the exact resolved configuration even when semantic version intent is insufficient to reproduce it.
+
+### 23.5 Behavioural release and model route are separate
+
+Do not couple Kei prompt/policy releases to one provider/model version.
+
+```text
+Kei behavioural release
+├── policy
+├── persona
+├── task contracts
+├── output schemas
+├── tools
+└── skills
+
+Model route
+├── provider/model selection
+├── fallback
+├── routing conditions
+├── rollout percentages
+└── provider budgets/limits where configured
+```
+
+Cloudflare AI Gateway is the model-routing boundary.
+
+This allows controlled comparisons such as:
+
+```text
+same Kei release
++ different model route
+```
+
+or:
+
+```text
+same model route
++ different Kei release
+```
+
+without changing both variables at once.
+
+Provider-specific request/response types remain behind Kakeido-owned model adapters.
+
+### 23.6 Deterministic logic versus model logic
+
+Use deterministic application/domain logic for:
 
 ```text
 totals
@@ -1104,33 +1344,187 @@ duplicates
 history counts
 review state
 rule results
+source identity
+financial classifications already confirmed by the user
 ```
 
-Use the LLM for explanation, summarisation, phrasing and bounded suggestions.
+Use the model for:
 
-Kei receives bounded task-specific grounding, not unrestricted database access.
+```text
+explanation
+summarisation
+phrasing
+bounded observations
+bounded suggestions permitted by the selected task
+```
+
+The model must never recalculate a canonical value when the application can supply it deterministically.
+
+### 23.7 Structured output and validation
+
+Kei returns structured output matching the selected task's output contract.
+
+Validation occurs before display or persistence.
+
+Validation may enforce:
+- schema correctness;
+- known canonical references;
+- evidence-state compatibility;
+- permitted action types;
+- absence of forbidden state mutations;
+- deterministic-value consistency where values are surfaced.
+
+Invalid output should:
+1. use a bounded retry only when safe and useful;
+2. otherwise fall back to deterministic product copy or omit the optional Kei content.
+
+Generated prose alone never creates:
+- reviewed classification;
+- plan change;
+- goal target;
+- rule mutation;
+- duplicate decision;
+- financial transaction.
+
+Core financial workflows continue when Kei is unavailable.
+
+### 23.8 Invocation trace metadata
+
+Each invocation should expose enough non-sensitive metadata for debugging, release comparison and evaluation:
+
+```text
+request_id
+user_id when permitted
+kei_release
+kei_bundle_hash
+task
+model_route
+actual provider/model
+application release
+experiment_id when applicable
+variant when applicable
+latency
+token/cost metadata when available
+validation result
+```
+
+This metadata is operational/evaluation context, not financial truth.
+
+Do not persist raw financial prompts/responses merely to make tracing easier.
+
+AI Gateway logging should default to metadata sufficient for model/provider/token/cost/latency analysis without retaining financial request/response payloads where the platform supports that separation.
+
+Selected sanitised failures may be promoted into evaluation datasets under the controls defined by `06`.
+
+### 23.9 Asynchronous and shadow execution seam
+
+Cloudflare Workflows may execute asynchronous Kei work where durable execution is useful.
 
 Examples:
 
 ```text
-DecisionExplanationGrounding
-WeeklySummaryGrounding
-GoalProgressGrounding
+background summary preparation
+candidate shadow invocation
+offline/production evaluation follow-up
 ```
 
-Do not automatically send raw CSV files, complete account history, unrelated goals, authentication data, secrets or raw logs.
+For shadow execution:
 
-Kei cannot directly persist reviewed classifications, plan changes, goal targets, rule mutations or duplicate decisions.
+```text
+production request
+       │
+       ├── active Kei → user
+       │
+       └── candidate Kei → isolated evaluation path
+```
 
-Core workflows continue when Kei is unavailable.
+Architectural constraints:
+- active and candidate receive the same immutable grounding snapshot where comparison requires it;
+- candidate output never reaches the user;
+- candidate execution cannot mutate canonical state;
+- candidate execution cannot emit normal product side effects;
+- shadow failure cannot fail the active user request.
+
+`06` owns when shadow mode is required and how a candidate is promoted.
+
+### 23.10 Agent runtime and memory seam
+
+Persistent conversational agents are not part of the initial runtime.
+
+Cloudflare `AIChatAgent` or `Think` may later support a product capability such as `Ask Kei` if `01` and `03` first establish the need and authority model.
+
+Future architecture must preserve:
+
+```text
+Neon canonical financial state
+≠
+agent conversational memory
+```
+
+Agent memory may retain bounded conversational context.
+
+It must never become:
+- reviewed financial history;
+- canonical classification;
+- plan state;
+- goal state;
+- rule state;
+- source-of-truth financial memory.
+
+If tools are introduced:
+- read tools expose bounded application-owned views;
+- raw database tools are prohibited;
+- tools inherit application authorisation;
+- write-capable tools require an explicit future canonical product decision;
+- consequential writes retain user confirmation and normal application/domain validation.
+
+Dynamic skills, subagents and agent-selected workflows are not initial runtime dependencies.
+
+They may be added only after demonstrated product need and after the evaluation/release controls in `06` can prove that they improve the system without weakening Kei's boundaries.
+
+### 23.11 Runtime component ownership
+
+Initial component mapping:
+
+```text
+Hono / application services
+→ task selection, authorisation and grounding
+
+packages/kei
+→ policy/persona/task/output contracts
+→ provider-neutral model adapter contracts
+→ Kei release manifests
+
+Cloudflare AI Gateway
+→ model routing, provider abstraction, fallback,
+  model telemetry and routing controls
+
+Cloudflare Workflows
+→ durable asynchronous Kei work and shadow execution
+
+Neon
+→ canonical application state
+→ experiment/evaluation metadata where product-owned storage is required
+
+Better Stack / Cloudflare Observability
+→ operational failures and runtime telemetry
+
+Promptfoo or equivalent evaluation tooling
+→ development/CI evaluation only, not production runtime
+```
+
+Do not add an external agent framework to initial Kei merely to reproduce capabilities already provided by explicit application services, Cloudflare Workflows and AI Gateway.
+
+A new framework must solve a measured capability gap.
+
 
 ---
 
 ## 24. First-party analytics architecture
 
-### 23.1 One first-party analytics subsystem
+### 24.1 One first-party analytics subsystem
 
-Use Neon Postgres as Kakeibo's first-party analytics store for:
+Use Neon Postgres as Kakeido's first-party analytics store for:
 
 ```text
 marketing web events
@@ -1160,7 +1554,7 @@ analytics.*_daily
 
 Use separate product and marketing event tables rather than forcing native-app and browser-specific context into one schema. Cross-surface analysis should use deliberate views/queries.
 
-### 23.2 Product analytics event envelope
+### 24.2 Product analytics event envelope
 
 A product event should support:
 
@@ -1186,7 +1580,7 @@ Product-event inserts must be idempotent. `event_id` plus the event time/partiti
 
 `properties` contains low-sensitivity event-specific context. It must not become a copy of financial-domain records.
 
-### 23.3 Marketing analytics event envelope
+### 24.3 Marketing analytics event envelope
 
 Marketing events preserve the updated Astro design's browser/acquisition context, including:
 
@@ -1209,7 +1603,7 @@ The updated Astro design's existing `analytics_events` table is the marketing-ev
 
 Cloudflare Web Analytics remains the baseline cookieless website dashboard. Neon provides raw queryable events for funnels, cohorts, attribution and cross-surface analysis.
 
-### 23.4 Semantic event taxonomy
+### 24.4 Semantic event taxonomy
 
 Track meaningful product transitions rather than every tap.
 
@@ -1237,7 +1631,7 @@ Avoid broad instrumentation such as `button_clicked`, `card_expanded` or `screen
 
 Event names and required/allowed properties are version-controlled contracts in `packages/analytics`.
 
-### 23.5 Client versus server events
+### 24.5 Client versus server events
 
 Prefer server-side product events for outcomes the application can authoritatively observe:
 
@@ -1259,7 +1653,7 @@ specific screen exposure
 
 This avoids treating a UI intention as proof that a domain action succeeded.
 
-### 23.6 Financial-data minimisation
+### 24.6 Financial-data minimisation
 
 Product analytics must not copy sensitive canonical financial values merely because they are available.
 
@@ -1293,9 +1687,9 @@ goal_created
 
 If analysis genuinely requires a financially derived dimension, define it explicitly, minimise precision, document the purpose and review its privacy impact before collection.
 
-### 23.7 Analytics identity
+### 24.7 Analytics identity
 
-Marketing visitors may begin anonymous while the app uses authenticated Kakeibo users.
+Marketing visitors may begin anonymous while the app uses authenticated Kakeido users.
 
 The architecture may support:
 
@@ -1316,7 +1710,7 @@ Identity linking requires an explicit product/privacy policy defining:
 
 Cross-surface acquisition analysis should use the minimum identity linkage necessary for the question being answered.
 
-### 23.8 TimescaleDB, aggregates and retention
+### 24.8 TimescaleDB, aggregates and retention
 
 Use TimescaleDB for analytics event tables where supported by the deployed Neon configuration.
 
@@ -1335,7 +1729,7 @@ Do not apply TimescaleDB requirements to canonical financial tables merely becau
 
 Raw-event retention and aggregate retention are policy decisions. Marketing analytics may follow the updated site's one-year raw-event baseline; product analytics retention must be explicitly set rather than inherited accidentally.
 
-### 23.9 Analytics availability
+### 24.9 Analytics availability
 
 Analytics is non-critical to the financial workflow.
 
@@ -1351,7 +1745,7 @@ rule creation
 
 Analytics ingestion may batch and retry, but it must not create a second domain event-processing architecture.
 
-### 23.10 Hard boundaries
+### 24.10 Hard boundaries
 
 ```text
 Product analytics
@@ -1375,7 +1769,7 @@ Mobile product events and authenticated product-behaviour events are Neon-only u
 
 ## 25. Marketing site and Meta conversion boundary
 
-`trykakeibo.com` uses Astro on Cloudflare and owns landing pages, pricing, product explanation, public help/content, campaigns, consent and marketing acquisition analytics.
+`trykakeido.com` uses Astro on Cloudflare and owns landing pages, pricing, product explanation, public help/content, campaigns, consent and marketing acquisition analytics.
 
 It does not own authenticated financial state.
 
@@ -1394,7 +1788,7 @@ consented browser events
 → allowlisted conversion events only → Meta CAPI
 ```
 
-The first-party Neon write is the complete marketing event record for Kakeibo analytics. Meta receives only the deliberately selected standard conversion subset. Analytics-only events such as scroll depth or page exit remain Neon-only.
+The first-party Neon write is the complete marketing event record for Kakeido analytics. Meta receives only the deliberately selected standard conversion subset. Analytics-only events such as scroll depth or page exit remain Neon-only.
 
 Never send to Meta or another advertising platform:
 
@@ -1419,7 +1813,7 @@ The authentication provider remains open.
 
 Fixed requirements:
 - secure native authentication flow;
-- API resolves provider identity to a Kakeibo user;
+- API resolves provider identity to a Kakeido user;
 - provider identity stays separate from canonical user ID;
 - every private resource is owner-scoped;
 - clients cannot authorise access by supplying arbitrary user IDs;
@@ -1463,6 +1857,11 @@ import_id
 review_id
 workflow_id
 release
+kei_release
+kei_bundle_hash
+model_route
+experiment_id
+variant
 ```
 
 Do not log raw CSV rows, secrets, access tokens or unnecessary financial descriptions.
@@ -1473,7 +1872,8 @@ Retention policy must distinguish:
 raw uploaded files
 canonical financial history
 financial audit history
-Kei content
+Kei content where deliberately retained
+Kei evaluation metadata
 product analytics raw events
 product analytics aggregates
 marketing analytics raw events
@@ -1642,9 +2042,12 @@ Kafka / NATS
 Kubernetes
 generic event sourcing
 second primary financial database
-separate Kei memory database
+separate Kei financial-truth/memory database
 queue by default
 generic Kei chat backend
+general-purpose agent runtime by default
+dynamic skills / subagents by default
+raw database tools for Kei
 vector/RAG by default
 third-party product analytics SDK/platform
 business accounting platform
@@ -1652,7 +2055,7 @@ full double-entry accounting engine
 wealth-management platform
 ```
 
-The general financial core is broader than the initial UX but limited to concepts Kakeibo actually needs.
+The general financial core is broader than the initial UX but limited to concepts Kakeido actually needs.
 
 The analytics subsystem is similarly deliberate: meaningful outcome events first, fine-grained behavioural instrumentation only when a defined research question requires it.
 
@@ -1665,7 +2068,7 @@ These remain explicit decisions rather than silent implementation choices:
 ```text
 authentication provider
 subscription / App Store billing abstraction
-primary LLM provider
+initial production model route / provider
 exact financial-data retention durations
 backup / restore policy and recovery objectives
 product-analytics retention duration
@@ -1691,8 +2094,8 @@ The architecture is correct when:
 - CSV is an initial ingestion adapter rather than a structural assumption;
 - a connected provider can feed the same normalised source-record pipeline without changing Financial Entry semantics;
 - provider connections, synchronisation state and provider transaction lifecycle remain outside the financial domain;
-- pending/posted provider state cannot be confused with reviewed/unreviewed Kakeibo state;
-- provider categorisation can be retained as preparation evidence without becoming canonical Kakeibo classification;
+- pending/posted provider state cannot be confused with reviewed/unreviewed Kakeido state;
+- provider categorisation can be retained as preparation evidence without becoming canonical Kakeido classification;
 - callback-driven incremental ingestion can be added without mobile polling or a second financial store;
 - source provenance remains traceable;
 - exact source re-imports are idempotent;
@@ -1709,6 +2112,15 @@ The architecture is correct when:
 - durable imports can retry/resume without corrupting canonical state;
 - Durable Objects and R2 never become canonical financial stores;
 - Kei is provider-independent, bounded and unable to mutate financial truth directly;
+- each Kei invocation is selected by deterministic application code and uses task-specific grounding;
+- Kei never receives unrestricted database access;
+- production Kei behaviour resolves to a traceable version-controlled release bundle and content hash;
+- behavioural releases remain separable from AI Gateway model routes;
+- structured Kei output is validated before display or persistence;
+- instruction-like merchant/provider/imported text remains data rather than model instructions;
+- agent memory, if later introduced, remains separate from canonical financial state;
+- shadow candidates can execute without reaching users or mutating canonical state;
+- no general-purpose agent framework, dynamic skill layer or subagent system is required for initial Kei;
 - core financial workflows continue when Kei is unavailable;
 - web, mobile and selected backend product events can be analysed through first-party Neon analytics;
 - product and marketing analytics use distinct event contracts/tables within the shared analytics subsystem;
@@ -1726,8 +2138,8 @@ The architecture is correct when:
 
 Core rule:
 
-> Keep financial meaning in Kakeibo-owned domain code, canonical application state and first-party analytics in deliberately separated Neon schemas, interfaces behind the Hono API, durable multi-step work in Cloudflare Workflows, blobs in R2, operational telemetry outside analytics, and Kei as a bounded interpretation layer over trusted financial data.
+> Keep financial meaning in Kakeido-owned domain code, canonical application state and first-party analytics in deliberately separated Neon schemas, interfaces behind the Hono API, durable multi-step work in Cloudflare Workflows, blobs in R2, operational telemetry outside analytics, and Kei as a versioned, task-bounded interpretation layer over application-selected trusted financial data.
 
 ---
 
-*Kakeibo — System Architecture and Data Spec v1.2 · 1 September 2026*
+*Kakeido — System Architecture and Data Spec v2 · 2 September 2026*

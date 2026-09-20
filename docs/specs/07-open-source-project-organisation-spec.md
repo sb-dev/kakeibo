@@ -1,12 +1,12 @@
-# Kakeibo — Open-Source Project Organisation Spec
+# Kakeido — Open-Source Project Organisation Spec
 
-**Version:** 1.2  
-**Date:** 2026-09-01  
+**Version:** 2  
+**Date:** 2026-09-02  
 **Status:** Canonical implementation spec
 
 ## 1. Purpose and authority
 
-Kakeibo is organised as one open-source product with one public codebase and several public surfaces.
+Kakeido is organised as one open-source product with one public codebase and several public surfaces.
 
 The repository remains the source of truth for:
 
@@ -19,10 +19,11 @@ deployment infrastructure
 tests
 technical documentation
 synthetic fixtures
+Kei behavioural/evaluation artefacts
 contribution/security policy
 ```
 
-The official Kakeibo service is one production deployment of that public software.
+The official Kakeido service is one production deployment of that public software.
 
 There is no separate:
 
@@ -57,7 +58,7 @@ This spec exposes those concepts publicly but does not redefine them.
 
 The project proposition is:
 
-> **Kakeibo is open-source personal-finance software. The official Kakeibo service is a supported production deployment of the same public codebase.**
+> **Kakeido is open-source personal-finance software. The official Kakeido service is a supported production deployment of the same public codebase.**
 
 The public source should make it possible to inspect:
 
@@ -67,7 +68,8 @@ Kakeibo calculations
 review truth
 rules/history preparation
 goal semantics
-Kei grounding
+Kei policy, persona, task contracts and grounding
+Kei release/evaluation definitions
 analytics events/boundaries
 provider integrations
 deployment infrastructure
@@ -85,7 +87,7 @@ operator-owned credentials
 +
 documented configuration
 =
-Kakeibo
+Kakeido
 ```
 
 The official service differs through official:
@@ -103,11 +105,11 @@ not through a hidden product architecture.
 
 ---
 
-## 3. Why open source fits Kakeibo
+## 3. Why open source fits Kakeido
 
 ### Trust
 
-Kakeibo handles sensitive financial data.
+Kakeido handles sensitive financial data.
 
 Users and engineers should be able to verify:
 
@@ -115,6 +117,8 @@ Users and engineers should be able to verify:
 what is deterministic
 what requires user confirmation
 what Kei receives
+which Kei policy/task contract governs a response
+how Kei candidates are benchmarked and promoted
 what analytics collects
 what can reach Meta
 what bank providers contribute
@@ -145,7 +149,7 @@ The strongest initial contribution seam is financial ingestion:
 source
 → IngestionAdapter
 → NormalisedSourceRecord
-→ Kakeibo financial core
+→ Kakeido financial core
 ```
 
 New source integrations should extend this boundary without changing financial semantics.
@@ -167,7 +171,10 @@ database migrations
 Cloudflare Workflows
 CSV adapters
 future Salt Edge adapter
-Kei grounding/contracts
+Kei policy/persona/task contracts
+Kei grounding/output schemas
+Kei release manifests
+Kei benchmark/red-team definitions and safe synthetic datasets
 analytics contracts
 marketing-site source
 Terraform/Wrangler configuration
@@ -186,6 +193,8 @@ production credentials
 provider secrets/private keys
 production financial data
 production analytics data
+raw production Kei grounding/prompts/responses containing financial data
+production AI traces containing personal or financial data
 customer/support data
 commercial agreements
 billing-account information
@@ -200,13 +209,14 @@ Private information must not become a hidden software dependency.
 
 ## 5. One architecture
 
-Kakeibo maintains one supported architecture:
+Kakeido maintains one supported architecture:
 
 ```text
 React Native / Expo
 Cloudflare
 Neon
 R2
+bounded Kei application runtime
 AI Gateway
 Better Stack
 supported external providers
@@ -217,7 +227,7 @@ Do not create parallel infrastructure solely for a separate community deployment
 Avoid by default:
 
 ```text
-Docker-only Kakeibo
+Docker-only Kakeido
 SQLite variant
 local object-storage stack
 local LLM stack
@@ -302,13 +312,14 @@ Not every user needs every surface.
 
 | Surface | Purpose | Main question |
 |---|---|---|
-| Website | Consumer acquisition/trust | Why use Kakeibo? |
-| README | Project overview/first success | What is Kakeibo and how can I inspect/run it? |
-| Docs | Product and technical reference | How does Kakeibo work? |
-| Academy | Kakeibo practice and product proficiency | How do I use Kakeibo well? |
-| Blog | Discovery and current thinking | What is Kakeibo learning and exploring? |
-| Canonical Specs | Source-of-truth behaviour | What must Kakeibo mean/do? |
+| Website | Consumer acquisition/trust | Why use Kakeido? |
+| README | Project overview/first success | What is Kakeido and how can I inspect/run it? |
+| Docs | Product and technical reference | How does Kakeido work? |
+| Academy | Kakeibo practice and product proficiency | How do I use Kakeido well? |
+| Blog | Discovery and current thinking | What is Kakeido learning and exploring? |
+| Canonical Specs | Source-of-truth behaviour | What must Kakeido mean/do? |
 | Synthetic Fixtures | Engineering/test evidence | Can behaviour be reproduced safely? |
+| Kei Evaluation Assets | Behavioural quality evidence | How is Kei tested without using production financial data? |
 | Issues | Actionable work | What needs changing? |
 | Discussions | Community exploration | How should we think about this? |
 | Security Policy | Private disclosure | How do I report a vulnerability? |
@@ -325,14 +336,15 @@ Public knowledge should flow from canonical sources:
 ```text
 canonical spec
 → implementation
-→ tests
+→ tests / Kei benchmarks where applicable
+→ release manifest
 → technical docs
 → README / website explanation
 ```
 
 A README, blog post, Issue, Discussion or marketing page cannot silently redefine behaviour.
 
-When public writing introduces an idea that becomes Kakeibo behaviour, update the owning spec.
+When public writing introduces an idea that becomes Kakeido behaviour, update the owning spec.
 
 ---
 
@@ -380,7 +392,7 @@ canonical spec → defines accepted behaviour
 Recommended:
 
 ```text
-kakeibo/
+kakeido/
 ├── README.md
 ├── LICENSE
 ├── SECURITY.md
@@ -402,6 +414,12 @@ kakeibo/
 │   ├── api-client/
 │   ├── validation/
 │   ├── kei/
+│   │   ├── policy/
+│   │   ├── persona/
+│   │   ├── tasks/
+│   │   ├── schemas/
+│   │   ├── evals/
+│   │   └── release/
 │   ├── design-tokens/
 │   ├── analytics/
 │   └── ...
@@ -424,11 +442,11 @@ kakeibo/
 │   ├── building-the-ritual/
 │   ├── monthly-planning/
 │   ├── long-term-direction/
-│   ├── understanding-kakeibo/
+│   ├── understanding-kakeido/
 │   └── advanced-use/
 │
 ├── blog/
-│   ├── kakeibo/
+│   ├── kakeido/
 │   ├── kakeibo/
 │   ├── money-and-behaviour/
 │   └── engineering-and-trust/
@@ -477,10 +495,11 @@ Recommended structure:
 
 ```text
 Hero
-What Kakeibo is
+What Kakeido is
 Weekly-review model
 Why open source
 Trust/AI/privacy boundaries
+Kei behaviour and evaluation
 Architecture at a glance
 Quick Start
 Run tests
@@ -495,7 +514,7 @@ Licence/trademark
 
 It should explicitly state:
 
-> The official Kakeibo service runs the same open-source application available in this repository.
+> The official Kakeido service runs the same open-source application available in this repository.
 
 Do not turn the README into the complete documentation.
 
@@ -508,6 +527,7 @@ README/website should provide direct routes to:
 ```text
 Financial Domain Model
 Kei Assistant Spec
+Kei evaluation/release documentation
 System Architecture/Data
 Analytics architecture
 Security policy
@@ -517,10 +537,11 @@ Key verifiable claims include:
 
 ```text
 Kei does not own financial truth
+production Kei behaviour is versioned and traceable to public source
 unreviewed activity is not silently reviewed
 product analytics is first-party in Neon
 product events do not route to Meta
-provider categories do not become Kakeibo truth automatically
+provider categories do not become Kakeido truth automatically
 ```
 
 Avoid vague security/AI marketing claims that cannot be substantiated.
@@ -543,7 +564,7 @@ load synthetic fixture
 complete a review flow
 ```
 
-Do not require production Meta, Salt Edge, store submission or production LLM configuration merely to run core tests.
+Do not require production Meta, Salt Edge, store submission or production LLM configuration merely to run core tests. Kei tests and benchmarks should support synthetic fixtures and controlled test model configuration.
 
 Development mocks are acceptable when defined by the testing architecture.
 
@@ -587,7 +608,7 @@ documented provider configuration
 +
 valid credentials
 =
-functioning Kakeibo deployment
+functioning Kakeido deployment
 ```
 
 Hidden official-only runtime behaviour is architecture/documentation drift.
@@ -659,7 +680,7 @@ commercial/provider agreement
 production connection data
 ```
 
-Adding Salt Edge must not create a separate Kakeibo financial model.
+Adding Salt Edge must not create a separate Kakeido financial model.
 
 ---
 
@@ -679,7 +700,7 @@ include deterministic tests
 
 Provider categories/merchant enrichment may be preparation evidence.
 
-They cannot become reviewed Kakeibo truth by themselves.
+They cannot become reviewed Kakeido truth by themselves.
 
 Adapter acceptance depends on correctness and maintenance cost, not popularity alone.
 
@@ -747,6 +768,8 @@ Reuse it across:
 domain tests
 adapter tests
 API tests
+Kei deterministic contract tests
+Kei benchmarks/red-team cases
 Maestro
 documentation
 screenshots
@@ -763,7 +786,9 @@ Never publish real personal financial exports as fixtures.
 |---|---|
 | Product definition | `01` |
 | Financial semantics | `02` |
-| Kei behaviour | `03` |
+| Kei behaviour/authority | `03` |
+| Kei runtime architecture | `05` |
+| Kei evaluation/release/operations | `06` |
 | Mobile design | `04` |
 | Architecture/data | `05` |
 | Delivery/operations | `06` |
@@ -799,6 +824,14 @@ Synthetic fixture
 ```
 
 ```text
+Kei behavioural contract
+→ prompt/task implementation
+→ benchmark/red-team cases
+→ immutable release manifest
+→ public release explanation
+```
+
+```text
 Ingestion contract
 → CSV adapters
 → Salt Edge
@@ -813,7 +846,7 @@ The goal is one authoritative meaning.
 
 ## 23. Docs
 
-Docs explain how Kakeibo works for users, contributors and independent operators.
+Docs explain how Kakeido works for users, contributors and independent operators.
 
 They are distinct from canonical specs:
 
@@ -847,6 +880,9 @@ first weekly review
 monthly planning
 long-term goals
 Kei
+Kei authority and Known / Likely / Unknown
+Kei runtime/release model
+Kei evaluation and privacy boundaries
 review truth
 rules/history
 transfers
@@ -864,7 +900,7 @@ Docs must not become a second source of product truth.
 
 ## 24. Academy
 
-The Academy teaches the Kakeibo practice and how to use Kakeibo effectively.
+The Academy teaches the Kakeibo practice and how to use Kakeido effectively.
 
 It is not a generic financial-education product and must not provide personalised financial advice.
 
@@ -889,14 +925,16 @@ Monthly planning
   deliberate adjustments
 
 Long-term direction
-  goals in Kakeibo
+  goals in Kakeido
   cash buffers
   sinking funds
   allocations vs contributions
 
-Understanding Kakeibo
+Understanding Kakeido
   review truth
-  what Kei knows
+  what Kei knows and does not know
+  Known / Likely / Unknown
+  why Kei cannot change financial truth
   transfers vs spending
   user authority
 
@@ -920,7 +958,7 @@ The Blog supports discovery and current thinking.
 Recommended editorial streams:
 
 ```text
-Kakeibo
+Kakeido
 → releases, product decisions, design changes
 
 Kakeibo
@@ -930,12 +968,12 @@ Money & Behaviour
 → financial reflection, habits, decision-making research
 
 Engineering & Trust
-→ privacy, bounded AI, open source, analytics, open banking
+→ privacy, bounded AI, Kei evaluation/versioning, open source, analytics, open banking
 ```
 
 The Blog may explore ideas before they become product behaviour.
 
-If an idea is adopted into Kakeibo, the owning canonical spec must be updated.
+If an idea is adopted into Kakeido, the owning canonical spec must be updated.
 
 The Blog must not publish identifiable financial data or turn general educational content into personalised financial advice.
 
@@ -947,7 +985,7 @@ The website remains primarily a consumer/trust surface.
 
 It answers:
 
-> Why should I trust and use Kakeibo?
+> Why should I trust and use Kakeido?
 
 The README answers:
 
@@ -980,6 +1018,7 @@ official service uses public code
 what is public/private
 financial-truth model
 Kei boundary
+Kei source/version/evaluation transparency
 analytics boundary
 security reporting
 contribution route
@@ -1001,6 +1040,7 @@ weekly review
 financial-domain modelling
 privacy
 bounded AI
+AI evaluation, shadow testing and release engineering
 open banking
 engineering decisions
 product research
@@ -1028,6 +1068,8 @@ localisation
 performance
 security
 developer tooling
+Kei benchmark/red-team improvements
+safe bounded Kei task/prompt improvements
 safe UI improvements
 ```
 
@@ -1035,7 +1077,7 @@ Product-scope changes require stronger review.
 
 Community demand is evidence, not automatic product direction.
 
-A technically sound pull request can still be wrong for Kakeibo.
+A technically sound pull request can still be wrong for Kakeido.
 
 ---
 
@@ -1090,6 +1132,8 @@ API behaviour
 review interaction
 analytics event
 goal interaction
+compatible Kei task/prompt implementation
+Kei benchmark/evaluator improvement
 ```
 
 Requires tests and spec compatibility.
@@ -1100,7 +1144,8 @@ Requires tests and spec compatibility.
 financial invariant
 product scope
 architecture boundary
-Kei authority
+Kei authority/policy
+Kei agent/tool/memory boundary
 privacy rule
 open-source governance
 ```
@@ -1121,6 +1166,7 @@ tests
 affected canonical spec
 privacy/security impact
 analytics impact if relevant
+Kei behaviour/evaluation impact if relevant
 release impact if relevant
 ```
 
@@ -1190,7 +1236,10 @@ Use `CODEOWNERS` selectively for high-consequence areas such as:
 ```text
 packages/domain/
 database migrations
-packages/kei/
+packages/kei/policy/
+packages/kei/tasks/
+packages/kei/schemas/
+packages/kei/evals/
 packages/analytics/
 infra/
 docs/specs/
@@ -1214,7 +1263,7 @@ disclosure process
 what must not be posted publicly
 ```
 
-Vulnerabilities involving authentication, authorisation, financial exposure, provider credentials/callbacks, Kei leakage or analytics privacy must not begin as public Issues.
+Vulnerabilities involving authentication, authorisation, financial exposure, provider credentials/callbacks, cross-user Kei grounding, prompt injection with material impact, model/provider data leakage, Kei tool-authorisation failures or analytics privacy must not begin as public Issues.
 
 Use GitHub private security advisories or another documented private route.
 
@@ -1239,96 +1288,73 @@ Do not maintain a permanently private patched product fork.
 
 ---
 
-## 37. Licence requirements
+## 37. Software licence
 
-Kakeibo requires an OSI-compatible licence before public launch.
-
-The licence decision must explicitly address:
+Kakeido adopts the **Apache License 2.0**.
 
 ```text
-modification
-redistribution
-commercial use
-hosted use
-attribution
-patent terms
-reciprocity
+SPDX identifier: Apache-2.0
+Copyright 2026 Samir Benzenine
 ```
 
-Do not describe a source-available licence that prohibits ordinary commercial use as open source.
+Apache-2.0 permits:
+- use;
+- modification;
+- redistribution;
+- commercial use;
+- independent hosted deployments.
 
-Exact licence selection remains a deliberate legal/strategic decision.
+It provides explicit copyright and patent grants while preserving attribution and notice requirements.
+
+Do not add private restrictions to the Apache-2.0 software licence or describe a more restrictive source-available variant as Kakeido's open-source licence.
+
+The repository root `LICENSE` file is authoritative for the full licence text.
 
 ---
 
 ## 38. Licence strategy
 
-Two broad directions:
+Kakeido deliberately chooses a permissive open-source model.
 
-### Permissive
-
-Examples:
-
-```text
-Apache-2.0
-MIT
-```
-
-Advantages:
+The intended trade-off is:
 
 ```text
 low adoption friction
-simple contribution/reuse
-commercial use allowed
+commercial compatibility
+straightforward contribution/reuse
+clear patent terms
 ```
 
-Trade-off:
+in exchange for allowing third parties to:
+- fork Kakeido;
+- modify it;
+- redistribute it;
+- operate commercial hosted versions;
+- keep their own modifications private where Apache-2.0 permits.
 
-```text
-competitors may reuse code without publishing modifications
-```
-
-### Copyleft
-
-A GPL-family licence may require reciprocal source availability in covered scenarios.
-
-Advantages:
-
-```text
-stronger reciprocity
-```
-
-Trade-offs:
-
-```text
-more licence/integration complexity
-hosted-service implications depend on licence
-```
-
-Do not invent a custom licence merely to restrict competitors while retaining an open-source label.
-
-Legal review should validate the final choice.
+Do not create a hidden premium core or intentionally reduce the public software to compensate for this permissive licence.
 
 ---
 
 ## 39. Hosted competition
 
-The project must explicitly decide whether third parties may operate competing hosted services under the selected licence.
+Kakeido accepts that Apache-2.0 permits third parties to operate competing hosted services.
 
-This is primarily a:
+Protection of the official service should come primarily from:
 
 ```text
-licence
-trademark
-execution
-service quality
+Kakeido trademark
+product quality
+operations
+provider relationships
+support
+continuous development
+user trust
 ```
 
-decision.
+not from source secrecy or intentionally crippled public functionality.
 
-Do not deliberately cripple public core functionality to create a hosted-service moat.
-
-Hosted value should come primarily from operating Kakeibo well.
+Software licensing and trademark rights remain separate.
 
 ---
 
@@ -1339,16 +1365,16 @@ Software licence and trademark are separate.
 Trademark policy governs use of:
 
 ```text
-Kakeibo
-Kakeibo logo
+Kakeido
+Kakeido logo
 Kei identity where protected
 official service branding
 claims of endorsement
 ```
 
-Forks may exercise their software rights without implying they are the official Kakeibo service.
+Forks may exercise their software rights without implying they are the official Kakeido service.
 
-Publish a simple trademark policy before ecosystem scale makes ambiguity expensive.
+Maintain the repository-level `TRADEMARKS.md` policy and mature it before broader public launch or ecosystem scale makes ambiguity expensive.
 
 ---
 
@@ -1383,7 +1409,7 @@ private review engine
 private Kei behaviour
 ```
 
-if Kakeibo is positioned as the open-source application.
+if Kakeido is positioned as the open-source application.
 
 Private service/admin tooling is acceptable when genuinely operational.
 
@@ -1434,19 +1460,142 @@ The public implementation makes collection behaviour inspectable.
 
 ## 45. Kei transparency
 
-Public Kei implementation should expose:
+Kei is part of the public product architecture, not a hidden hosted-service behaviour layer.
+
+Public Kei artefacts should normally include:
 
 ```text
-grounding construction
-deterministic financial inputs
-provider boundary
-structured output validation
-failure fallback
+behavioural authority/policy
+persona definition
+task contracts
+grounding contracts/builders
+output schemas
+provider-neutral model contracts
+structured-output validation
+fallback behaviour
+release manifests
+benchmark definitions
+red-team definitions
+safe synthetic evaluation datasets
 ```
 
-Do not publish user prompts/data or production traces containing financial information.
+The public repository should make it possible to answer:
 
-Product-defining prompt/policy behaviour should generally be version-controlled where safe.
+```text
+What may Kei do?
+What may Kei never do?
+What financial information can a Kei task receive?
+Which exact behavioural release produced a response?
+How is that release benchmarked?
+What changed between two Kei releases?
+```
+
+### 45.1 Git as behavioural source of truth
+
+Production-defining Kei behaviour remains version-controlled in Git.
+
+Canonical flow:
+
+```text
+03 behavioural contract
+→ Kei policy/persona/task implementation
+→ benchmark/red-team evidence
+→ immutable Kei release manifest
+→ production promotion under 06
+```
+
+Do not make an external prompt-management dashboard the only place where production behaviour exists.
+
+A dashboard may mirror, test or visualise Kei behaviour, but an official production Kei release must resolve to public Git-traceable source.
+
+### 45.2 Public release traceability
+
+Kei runtime releases use Semantic Versioning as defined by `06`.
+
+Canonical spec documents use whole-number documentation versions; that rule does not apply to Kei runtime releases.
+
+A production Kei release should be traceable to:
+
+```text
+Kei semantic version
+bundle hash
+public source commit
+policy/persona/task/schema versions
+benchmark-suite/dataset versions
+model-route reference
+```
+
+The exact provider/model selected by a dynamic route may vary under controlled rollout, but the route/version relationship must remain operationally traceable.
+
+Do not reuse an already released Kei semantic version for changed behaviour.
+
+### 45.3 Public evaluation assets
+
+Safe evaluation artefacts should be public by default:
+
+```text
+synthetic benchmark cases
+deterministic assertions
+model-judge definitions where safe
+red-team cases where publication does not create material security risk
+benchmark configuration
+evaluation command/documentation
+aggregate benchmark results when published
+```
+
+Evaluation assets are engineering evidence, not a separate public "Examples" surface.
+
+They should live with Kei engineering/testing assets and be reusable by contributors and CI.
+
+### 45.4 Private production evidence
+
+Remain private by necessity:
+
+```text
+raw production financial grounding
+raw production prompts containing financial data
+raw production responses containing personal financial context
+production AI traces containing user data
+private user feedback/support evidence
+sensitive anti-abuse details where disclosure creates material risk
+provider credentials
+```
+
+Production failure evidence should become public regression coverage only after it is reduced to the minimum reproducible behaviour and sanitised or replaced by synthetic data.
+
+### 45.5 Contributor expectations for Kei
+
+A Kei contribution that changes generated behaviour should identify:
+- affected task/policy/persona/schema;
+- intended behavioural change;
+- benchmark impact;
+- red-team impact where relevant;
+- compatibility/version impact;
+- privacy/security impact;
+- evidence that deterministic financial truth remains outside the model.
+
+A contribution may improve wording or task behaviour without changing `03` when it remains inside the existing behavioural contract.
+
+A change to Kei authority, advice boundaries, memory/tool policy or task semantics requires canonical-spec review.
+
+### 45.6 External AI platforms
+
+Kakeido may use external model providers, AI Gateway features or evaluation/observability platforms.
+
+They must not create a private behavioural fork.
+
+Required invariant:
+
+```text
+external AI service
+≠
+canonical Kei behaviour
+```
+
+The public repository must contain enough configuration/contracts to understand the official behaviour without access to a private dashboard.
+
+Secrets, production routing credentials and private user traces remain outside the repository.
+
 
 ---
 
@@ -1486,6 +1635,7 @@ user-visible changes
 important technical changes
 migration requirements
 provider compatibility
+Kei behavioural/model-route changes when user-relevant
 known issues
 security advisories when appropriate
 ```
@@ -1499,6 +1649,7 @@ database migrations
 API/mobile runtime
 provider integrations
 Salt Edge API later
+Kei release/model-route compatibility where relevant
 ```
 
 ---
@@ -1540,6 +1691,7 @@ canonical specs
 working source
 tests
 synthetic fixtures
+Kei benchmark/red-team assets
 CI
 basic docs
 ```
@@ -1574,7 +1726,7 @@ Only after demonstrated demand:
 
 ```text
 integration index
-richer examples
+richer walkthroughs/reference fixtures
 formal compatibility policy
 additional maintainers
 ```
@@ -1600,6 +1752,17 @@ release notes
 website capability update
 ```
 
+Kei behavioural release example:
+
+```text
+policy/task implementation
+benchmark/red-team evidence
+release manifest
+relevant technical docs
+release notes
+README/site trust explanation only when the user-facing contract changes
+```
+
 Do not mechanically update every surface for every change.
 
 ---
@@ -1621,7 +1784,7 @@ unless deliberately adopted.
 Review asks:
 
 ```text
-Does this improve canonical Kakeibo?
+Does this improve canonical Kakeido?
 Does it preserve the specs?
 Does maintenance cost match value?
 Does it create a parallel system?
@@ -1643,7 +1806,10 @@ Repository
 ├── Source
 ├── Canonical Specs
 ├── Technical Docs
+├── Academy
+├── Blog
 ├── Synthetic Fixtures
+├── Kei Evaluation Assets
 ├── Deployment Guide
 ├── CONTRIBUTING
 ├── SECURITY
@@ -1661,7 +1827,7 @@ special self-hosting distribution
 complex plugin framework
 ```
 
-The goal is to make the real Kakeibo product:
+The goal is to make the real Kakeido product:
 
 ```text
 transparent
@@ -1690,7 +1856,7 @@ Prefer conventional mechanisms.
 
 Do not add a Contributor Licence Agreement without a concrete reason.
 
-Legal review should validate the final model.
+Legal review should validate trademark, brand/asset and contributor-policy details where appropriate. The software licence is already Apache-2.0.
 
 ---
 
@@ -1698,14 +1864,20 @@ Legal review should validate the final model.
 
 The open-source organisation is correct when:
 
-- the repository contains the real Kakeibo product rather than a reduced edition;
+- the repository contains the real Kakeido product rather than a reduced edition;
 - the official service uses the same canonical architecture as the public project;
-- another operator can deploy Kakeibo with documented supported provider accounts and their own credentials;
+- another operator can deploy Kakeido with documented supported provider accounts and their own credentials;
 - no parallel community/self-hosted architecture is required;
 - secrets/user data/commercial agreements remain private without becoming hidden runtime dependencies;
 - every public surface has a clear responsibility;
 - behaviour remains owned by canonical specs rather than README/blog/issues;
 - financial, Kei and analytics trust boundaries are inspectable;
+- production-defining Kei policy/persona/task/schema behaviour is Git-traceable rather than dashboard-only;
+- official Kei releases use Semantic Versioning plus immutable bundle hashes while canonical spec documents use whole-number versions;
+- safe Kei benchmark/red-team definitions and synthetic evaluation datasets are public engineering assets;
+- raw production financial prompts, grounding, responses and user traces remain private;
+- production Kei defects can become public regression cases only after sanitisation or synthetic reconstruction;
+- external AI/evaluation platforms do not become a hidden source of canonical Kei behaviour;
 - public synthetic fixtures replace real personal financial data in tests and documentation;
 - adapters can be contributed without redefining the financial core;
 - Salt Edge can later be public as a normal ingestion adapter;
@@ -1721,8 +1893,8 @@ The open-source organisation is correct when:
 
 Core rule:
 
-> Keep the real Kakeibo product public, keep sensitive operations private, maintain one architecture, and make trust verifiable through specifications, code and tests.
+> Keep the real Kakeido product and production-defining Kei behaviour public, keep user data and sensitive operations private, maintain one architecture, and make trust verifiable through specifications, code, benchmarks and tests.
 
 ---
 
-*Kakeibo — Open-Source Project Organisation Spec v1.2 · 1 September 2026*
+*Kakeido — Open-Source Project Organisation Spec v2 · 2 September 2026*
