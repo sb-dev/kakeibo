@@ -6,11 +6,11 @@ These seven specifications are the source of truth for Kakeibo.
 |---|---|---:|---|
 | 01 | [Product and UX](01-product-and-ux-spec.md) | 1.1 | product scope, journeys, IA, progressive disclosure and commercial/product boundaries |
 | 02 | [Financial Domain Model](02-financial-domain-model-spec.md) | 1.1 | financial concepts, calculations, classifications, goals, review truth and invariants |
-| 03 | [Kei Assistant](03-kei-assistant-spec.md) | 1.0 | assistant identity, evidence, language, safety and user authority |
+| 03 | [Kei Assistant](03-kei-assistant-spec.md) | 2 | assistant identity, evidence, language, safety and user authority |
 | 04 | [Mobile Design System](04-mobile-design-system-spec.md) | 1.0 | mobile presentation, interactions, components and accessibility |
-| 05 | [System Architecture and Data](05-system-architecture-and-data-spec.md) | 1.2 | runtime/data boundaries, ingestion, persistence, analytics, security and provider architecture |
-| 06 | [Engineering Delivery and Operations](06-engineering-delivery-and-operations-spec.md) | 1.0 | testing, CI/CD, releases, rollout, observability, incidents and recovery |
-| 07 | [Open-Source Project Organisation](07-open-source-project-organisation-spec.md) | 1.2 | repository organisation, Docs/Academy/Blog, contribution, licensing and trademark boundaries |
+| 05 | [System Architecture and Data](05-system-architecture-and-data-spec.md) | 2 | runtime/data boundaries, ingestion, persistence, analytics, security and provider architecture |
+| 06 | [Engineering Delivery and Operations](06-engineering-delivery-and-operations-spec.md) | 2 | testing, CI/CD, releases, rollout, observability, incidents and recovery |
+| 07 | [Open-Source Project Organisation](07-open-source-project-organisation-spec.md) | 2 | repository organisation, Docs/Academy/Blog, contribution, licensing and trademark boundaries |
 
 ## Authority rule
 
@@ -41,3 +41,4 @@ Research belongs in [`../research-logs/`](../research-logs/).
 research → may explain why
 canonical spec → defines accepted behaviour
 ```
+
