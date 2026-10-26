@@ -1298,6 +1298,7 @@ Core test:
 
 ---
 
-**Version:** 1.1  
+**Version:** 2\
 **Date:** 2026-09-02  
 **Status:** Canonical implementation spec
+
