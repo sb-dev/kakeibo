@@ -4,9 +4,11 @@ This roadmap connects Kakeibo's product requirements to the work that proves Pac
 
 ## Current position
 
-**Now: prepare the checkpoint 1 financial-domain delivery.** The repository contains the seven canonical specifications and project scaffolding. It has no executable financial implementation, package manifest or application CI. No Kakeibo checkpoint acceptance is recorded here.
+**Now: deliver the local CLI MVP.** The repository contains the seven canonical specifications and project scaffolding. It has no executable financial implementation, package manifest or application CI. No Kakeibo checkpoint acceptance is recorded here.
 
-**Next:** checkpoints 2–5 and the product journeys built on their foundations. **Later:** checkpoints 6–9, public-launch acceptance and connected-banking Graduation.
+Follow the [CLI MVP PRD](cli-mvp-prd.md) and [implementation tasks](cli-mvp-tasks.md): monthly planning and safe storage → CSV import → weekly review → reporting → release verification. The CLI retains all four envelopes and savings allocation. This release does not amend canonical specifications or establish Pactwright checkpoint acceptance; the checkpoint programme below remains separate.
+
+**Next:** checkpoint 1 financial-domain acceptance, then checkpoints 2–5 and the product journeys built on their foundations. **Later:** checkpoints 6–9, public-launch acceptance and connected-banking Graduation.
 
 ## Authority and dependencies
 
@@ -107,3 +109,4 @@ For each accepted milestone, retain the owning requirements, exact execution/dep
 [business]: https://github.com/sb-dev/production-skills/blob/main/docs/research-logs/2026-09-08-business-building-skills-new-project-bootstrap-process.md#23-stage-16--design-canonical-business-stress-tests
 [advertising]: https://github.com/sb-dev/production-skills/blob/main/docs/research-logs/2026-09-08-advertising-production-skills-new-project-bootstrap-process.md#23-stage-17--design-canonical-advertising-stress-tests
 [pi-roadmap]: https://github.com/sb-dev/pactwright/blob/main/docs/specs/03-project-intelligence.md#21-intent-roadmap
+
