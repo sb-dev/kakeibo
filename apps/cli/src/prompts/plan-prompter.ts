@@ -8,7 +8,8 @@ export type PlanPrompter = {
   confirm(message: string, defaultValue: boolean): Promise<boolean>;
 };
 
-export type ScriptedAnswer = string | boolean;
+/** `null` accepts the prompt default, as pressing Enter does in a terminal. */
+export type ScriptedAnswer = string | boolean | null;
 
 /** Replays a fixed list of answers in order. Throws when the script runs out. */
 export function scriptedPrompter(answers: readonly ScriptedAnswer[]): PlanPrompter & { readonly asked: string[] } {
@@ -23,13 +24,15 @@ export function scriptedPrompter(answers: readonly ScriptedAnswer[]): PlanPrompt
   };
   return {
     asked,
-    async askMoney(message) {
+    async askMoney(message, defaultText) {
       const answer = next(message);
+      if (answer === null) return defaultText ?? "";
       if (typeof answer !== "string") throw new Error(`expected text answer for: ${message}`);
       return answer;
     },
-    async askText(message) {
+    async askText(message, defaultText) {
       const answer = next(message);
+      if (answer === null) return defaultText ?? "";
       if (typeof answer !== "string") throw new Error(`expected text answer for: ${message}`);
       return answer;
     },

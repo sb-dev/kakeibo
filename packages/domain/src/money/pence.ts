@@ -74,12 +74,28 @@ export function negatePence(value: Pence): Pence {
   return pence(-value);
 }
 
+/** Split pence into whole pounds and pence using integer arithmetic only. */
+function splitPence(value: Pence): { readonly negative: boolean; readonly whole: string; readonly fraction: string } {
+  const magnitude = BigInt(Math.abs(value));
+  return {
+    negative: value < 0,
+    whole: (magnitude / 100n).toString(),
+    fraction: (magnitude % 100n).toString().padStart(2, "0"),
+  };
+}
+
 /** Render pence as "£1,234.56" or "-£10.00". Hand-rolled so output is stable across locales. */
 export function formatPence(value: Pence): string {
-  const negative = value < 0;
-  const magnitude = Math.abs(value);
-  const whole = Math.floor(magnitude / 100);
-  const fraction = magnitude % 100;
-  const wholeText = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${negative ? "-" : ""}£${wholeText}.${fraction.toString().padStart(2, "0")}`;
+  const { negative, whole, fraction } = splitPence(value);
+  const wholeText = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${negative ? "-" : ""}£${wholeText}.${fraction}`;
+}
+
+/**
+ * Render pence as plain decimal pounds such as "1234.56" or "-10.00", with no sign or separators,
+ * so that parseMoney(formatPencePlain(x)) returns x exactly. Used for prompt defaults.
+ */
+export function formatPencePlain(value: Pence): string {
+  const { negative, whole, fraction } = splitPence(value);
+  return `${negative ? "-" : ""}${whole}.${fraction}`;
 }

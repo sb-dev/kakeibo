@@ -8,6 +8,7 @@ import {
   envelopeTotal,
   flexibleBudget,
   formatPence,
+  formatPencePlain,
   goalAllocationTotal,
   parseMoney,
   parseMonth,
@@ -69,7 +70,7 @@ function renderProposal(month: Month, plan: PlanInput, revisionNumber: number): 
 }
 
 async function askAmount(context: CommandContext, message: string, current: Pence | undefined): Promise<Pence> {
-  const defaultText = current === undefined ? undefined : (current / 100).toFixed(2);
+  const defaultText = current === undefined ? undefined : formatPencePlain(current);
   for (;;) {
     const answer = await context.prompter.askMoney(message, defaultText);
     const parsed = parseMoney(answer);
@@ -179,6 +180,17 @@ export async function runPlan(context: CommandContext, options: PlanOptions): Pr
   }
 
   const saved = await updateStore(context.paths, (current) => {
+    // The preview compared the proposal with `previous`. If another process saved a revision
+    // since then, the user has not seen the effect of this change (PRD §4.2): refuse to save.
+    const latest = currentPlanRevision(current, month);
+    const latestNumber = latest?.revision ?? 0;
+    const previewedNumber = previous?.revision ?? 0;
+    if (latestNumber !== previewedNumber) {
+      throw new CliError(
+        `The plan for ${month} changed while you were editing (revision ${latestNumber} is now saved; you saw ` +
+          `${previewedNumber === 0 ? "no plan" : `revision ${previewedNumber}`}). Run the command again to review the current plan.`,
+      );
+    }
     const result = addPlanRevision(current, month, validated.value, context.now().toISOString());
     return { store: result.store, result: result.revision };
   });

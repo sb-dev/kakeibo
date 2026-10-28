@@ -6,7 +6,8 @@ import type { CommandContext } from "../context.ts";
 import { CliError, NotInteractiveError, StoreMissingError, UsageError } from "../errors.ts";
 import { scriptedPrompter, type ScriptedAnswer } from "../prompts/plan-prompter.ts";
 import { storePaths, type StorePaths } from "../storage/paths.ts";
-import { initStore, loadStore } from "../storage/store-file.ts";
+import { initStore, loadStore, updateStore } from "../storage/store-file.ts";
+import { addPlanRevision, pence, savingsGoal, validatePlan, type Month, type Store } from "@kakeibo/domain";
 import { runPlan } from "./plan.ts";
 
 const NOW = new Date("2026-10-28T10:00:00.000Z");
@@ -146,6 +147,87 @@ describe("plan (interactive)", () => {
     const { context, out } = makeContext(PRD_ANSWERS);
     await runPlan(context, {});
     expect(out.join("\n")).toContain("Saved plan revision 1 for 2026-10");
+  });
+});
+
+describe("plan (concurrent sessions)", () => {
+  function saveOtherSession(store: Store) {
+    const validated = validatePlan({
+      planning_income: pence(60000),
+      fixed_commitments: pence(10000),
+      plan_funded_goal_allocations: [{ goal_id: savingsGoal(store).id, amount: pence(10000) }],
+      envelopes: { needs: pence(20000), wants: pence(15000), culture: pence(2500), unexpected: pence(2500) },
+      intention: "Saved by the other session",
+    });
+    if (!validated.ok) throw new Error("fixture must validate");
+    const result = addPlanRevision(store, "2026-10" as Month, validated.value, NOW.toISOString());
+    return { store: result.store, result: result.revision };
+  }
+
+  it("rejects a proposal when another session saved a revision after the preview", async () => {
+    await runPlan(makeContext(PRD_ANSWERS).context, { month: "2026-10" });
+    const { context, prompter } = makeContext(["550", "100", "100", "200", "100", "25", "25", "Stale", true]);
+    const original = prompter.confirm.bind(prompter);
+    prompter.confirm = async (message, defaultValue) => {
+      await updateStore(paths, saveOtherSession);
+      return original(message, defaultValue);
+    };
+
+    const error = await runPlan(context, { month: "2026-10" }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(CliError);
+    expect((error as CliError).message).toContain("changed while you were editing");
+    expect((error as CliError).fullMessage).toContain("No data was changed.");
+
+    const store = await loadStore(paths);
+    const revisions = store.plans[0]?.revisions ?? [];
+    expect(revisions.map((revision) => revision.planning_income)).toEqual([50000, 60000]);
+    expect(revisions[1]?.intention).toBe("Saved by the other session");
+    expect(store.history).toHaveLength(2);
+  });
+
+  it("rejects a proposal when the first plan for the month appeared after the preview", async () => {
+    const { context, prompter } = makeContext(PRD_ANSWERS);
+    const original = prompter.confirm.bind(prompter);
+    prompter.confirm = async (message, defaultValue) => {
+      await updateStore(paths, saveOtherSession);
+      return original(message, defaultValue);
+    };
+    await expect(runPlan(context, { month: "2026-10" })).rejects.toThrow(/changed while you were editing/);
+    const store = await loadStore(paths);
+    expect(store.plans[0]?.revisions.map((revision) => revision.planning_income)).toEqual([60000]);
+  });
+});
+
+describe("plan (exact defaults)", () => {
+  it("keeps saved amounts exact when the user accepts every default at the safe-integer boundary", async () => {
+    const huge = "90071992547409.90"; // 9007199254740990 pence
+    await runPlan(makeContext([huge, "0", "0", huge, "0", "0", "0", "", true]).context, { month: "2026-10" });
+    const first = (await loadStore(paths)).plans[0]?.revisions[0];
+    expect(first?.planning_income).toBe(9007199254740990);
+    expect(first?.envelopes.needs).toBe(9007199254740990);
+
+    await runPlan(makeContext([null, null, null, null, null, null, null, null, true]).context, { month: "2026-10" });
+    const store = await loadStore(paths);
+    const second = store.plans[0]?.revisions[1];
+    expect(second?.revision).toBe(2);
+    expect(second?.planning_income).toBe(first?.planning_income);
+    expect(second?.fixed_commitments).toBe(first?.fixed_commitments);
+    expect(second?.plan_funded_goal_allocations).toEqual(first?.plan_funded_goal_allocations);
+    expect(second?.envelopes).toEqual(first?.envelopes);
+    expect(second?.intention).toBe(first?.intention);
+  });
+
+  it("offers the saved amounts as defaults and accepting them re-saves the PRD plan unchanged", async () => {
+    await runPlan(makeContext(PRD_ANSWERS).context, { month: "2026-10" });
+    await runPlan(makeContext([null, null, null, null, null, null, null, null, true]).context, { month: "2026-10" });
+    const store = await loadStore(paths);
+    expect(store.plans[0]?.revisions).toHaveLength(2);
+    expect(store.plans[0]?.revisions[1]).toMatchObject({
+      planning_income: 50000,
+      fixed_commitments: 10000,
+      envelopes: { needs: 15000, wants: 10000, culture: 2500, unexpected: 2500 },
+      intention: "Cook at home",
+    });
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MoneyRangeError } from "../errors.ts";
-import { addPence, formatPence, parseMoney, pence, subPence, sumPence } from "./pence.ts";
+import { addPence, formatPence, formatPencePlain, parseMoney, pence, subPence, sumPence } from "./pence.ts";
 
 function parsed(text: string): number {
   const result = parseMoney(text);
@@ -77,5 +77,24 @@ describe("formatPence", () => {
     expect(formatPence(pence(50000))).toBe("£500.00");
     expect(formatPence(pence(123456789))).toBe("£1,234,567.89");
     expect(formatPence(pence(-1000))).toBe("-£10.00");
+  });
+
+  it("stays exact at the top of the safe integer range", () => {
+    expect(formatPence(pence(Number.MAX_SAFE_INTEGER))).toBe("£90,071,992,547,409.91");
+    expect(formatPence(pence(9007199254740990))).toBe("£90,071,992,547,409.90");
+    expect(formatPence(pence(9007199254740900))).toBe("£90,071,992,547,409.00");
+  });
+});
+
+describe("formatPencePlain", () => {
+  it("renders plain decimal pounds that parse back to the same pence", () => {
+    expect(formatPencePlain(pence(0))).toBe("0.00");
+    expect(formatPencePlain(pence(5))).toBe("0.05");
+    expect(formatPencePlain(pence(50000))).toBe("500.00");
+    expect(formatPencePlain(pence(-1000))).toBe("-10.00");
+    expect(formatPencePlain(pence(9007199254740990))).toBe("90071992547409.90");
+    for (const value of [0, 1, 99, 100, 123456789, 9007199254740900, 9007199254740990, Number.MAX_SAFE_INTEGER]) {
+      expect(parseMoney(formatPencePlain(pence(value)))).toEqual({ ok: true, value });
+    }
   });
 });

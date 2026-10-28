@@ -158,6 +158,24 @@ describe("corrupt and unsupported stores", () => {
     expect(currentPlanRevision(recovered, OCTOBER)?.revision).toBe(1);
   });
 
+  it("rejects a hand-edited plan that no longer balances and leaves store and backup unchanged", async () => {
+    await initStore(paths, NOW);
+    await updateStore(paths, savePrdPlan);
+    const backupBefore = await fs.readFile(paths.backup, "utf8");
+    const edited = JSON.parse(await fs.readFile(paths.store, "utf8")) as { plans: { revisions: { envelopes: { needs: number } }[] }[] };
+    edited.plans[0]!.revisions[0]!.envelopes.needs = 1;
+    const editedText = JSON.stringify(edited, null, 2);
+    await fs.writeFile(paths.store, editedText, "utf8");
+
+    const error = await loadStore(paths).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(CorruptStoreError);
+    expect((error as CorruptStoreError).message).toContain("Envelopes total");
+    await expect(updateStore(paths, (store) => savePrdPlan(store, 60000))).rejects.toBeInstanceOf(CorruptStoreError);
+    expect(await fs.readFile(paths.store, "utf8")).toBe(editedText);
+    expect(await fs.readFile(paths.backup, "utf8")).toBe(backupBefore);
+    expect(await listDir()).toEqual(["store.json", "store.json.bak"]);
+  });
+
   it("refuses to save a store that fails validation after mutation", async () => {
     await initStore(paths, NOW);
     const before = await fs.readFile(paths.store, "utf8");

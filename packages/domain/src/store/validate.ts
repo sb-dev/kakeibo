@@ -1,5 +1,7 @@
 import { isTreatment } from "../classification/vocabulary.ts";
-import { isPence } from "../money/pence.ts";
+import { MoneyRangeError } from "../errors.ts";
+import { isPence, type Pence } from "../money/pence.ts";
+import { describePlanError, validatePlan } from "../plan/plan.ts";
 import { parseMonth } from "../periods/periods.ts";
 import { err, ok, type Result } from "../result.ts";
 import { ID_PREFIXES, SCHEMA_VERSION, STORE_CURRENCY, type Store } from "./schema.ts";
@@ -27,6 +29,36 @@ const COLLECTIONS = [
 
 function isObject(value: unknown): value is Json {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A revision whose amounts have already passed the structural checks above. */
+type StoredRevision = {
+  readonly planning_income: Pence;
+  readonly fixed_commitments: Pence;
+  readonly plan_funded_goal_allocations: readonly { readonly goal_id: string; readonly amount: Pence }[];
+  readonly envelopes: { readonly needs: Pence; readonly wants: Pence; readonly culture: Pence; readonly unexpected: Pence };
+};
+
+function validateRevisionEquations(revision: StoredRevision, path: string, fail: (path: string, message: string) => void): void {
+  try {
+    const result = validatePlan({
+      planning_income: revision.planning_income,
+      fixed_commitments: revision.fixed_commitments,
+      plan_funded_goal_allocations: revision.plan_funded_goal_allocations,
+      envelopes: revision.envelopes,
+    });
+    if (!result.ok) {
+      for (const error of result.error) {
+        fail(path, describePlanError(error));
+      }
+    }
+  } catch (error) {
+    if (error instanceof MoneyRangeError) {
+      fail(path, "plan totals leave the safe integer range");
+      return;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -135,6 +167,7 @@ export function validateStore(value: unknown): Result<Store, readonly StoreValid
           fail(rpath, "expected an object");
           return;
         }
+        const errorsBefore = errors.length;
         if (revision["revision"] !== revisionIndex + 1) {
           fail(`${rpath}.revision`, `expected revision number ${revisionIndex + 1}`);
         }
@@ -176,6 +209,11 @@ export function validateStore(value: unknown): Result<Store, readonly StoreValid
         }
         if (typeof revision["confirmed_at"] !== "string") {
           fail(`${rpath}.confirmed_at`, "expected a timestamp string");
+        }
+        // Once every amount is structurally valid, the revision must satisfy the planning
+        // equations (Financial Model §5). A stored plan that does not balance is corrupt.
+        if (errors.length === errorsBefore) {
+          validateRevisionEquations(revision as StoredRevision, rpath, fail);
         }
       });
     });
