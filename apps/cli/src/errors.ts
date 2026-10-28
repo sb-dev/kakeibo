@@ -12,18 +12,39 @@ export const EXIT_CODES = {
 export class CliError extends Error {
   readonly exitCode: number;
   readonly dataChanged: boolean;
+  /** Replaces the default data-change statement when more detail is needed. */
+  readonly dataStatement: string | undefined;
 
-  constructor(message: string, options: { exitCode?: number; dataChanged?: boolean; cause?: unknown } = {}) {
+  constructor(message: string, options: { exitCode?: number; dataChanged?: boolean; dataStatement?: string; cause?: unknown } = {}) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = new.target.name;
     this.exitCode = options.exitCode ?? EXIT_CODES.failure;
     this.dataChanged = options.dataChanged ?? false;
+    this.dataStatement = options.dataStatement;
   }
 
   /** The message with its data-change statement appended. */
   get fullMessage(): string {
-    return `${this.message} ${this.dataChanged ? "Data was saved." : "No data was changed."}`;
+    return `${this.message} ${this.dataStatement ?? (this.dataChanged ? "Data was saved." : "No data was changed.")}`;
   }
+}
+
+/**
+ * An error that ends an interactive session after earlier actions in it were saved, as in `review`
+ * and `edit`. Those actions stay saved, so the message must not say that no data changed (PRD §3).
+ */
+export function afterSavedActions(error: unknown, saved: number): unknown {
+  if (saved === 0 || (error instanceof CliError && error.dataChanged)) return error;
+  const earlier = saved === 1 ? "1 earlier confirmed action in this session was saved" : `${saved} earlier confirmed actions in this session were saved`;
+  if (error instanceof CliError) {
+    return new CliError(error.message, { exitCode: error.exitCode, dataChanged: true, dataStatement: `${earlier}; the interrupted action was not.`, cause: error });
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return new CliError(`Unexpected error: ${message}`, {
+    dataChanged: true,
+    dataStatement: `${earlier}; whether the interrupted action was saved is unknown.`,
+    cause: error,
+  });
 }
 
 export class UsageError extends CliError {

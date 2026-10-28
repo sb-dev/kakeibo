@@ -10,7 +10,7 @@ import {
   type IsoDate,
 } from "@kakeibo/domain";
 import type { CommandContext } from "../context.ts";
-import { NotInteractiveError, UsageError } from "../errors.ts";
+import { NotInteractiveError, UsageError, afterSavedActions } from "../errors.ts";
 import type { Choice } from "../prompts/prompter.ts";
 import { addCategoryFlow, classifyFlow, closeFlow, confirmFlow, duplicatesFlow, reflectionFlow, restoreFlow } from "../review/actions.ts";
 import { describeEntry, renderWeek } from "../review/render.ts";
@@ -55,61 +55,67 @@ export async function runReview(context: CommandContext, options: ReviewOptions)
 
   let store = await loadStore(context.paths);
   context.out(renderWeek(store, weekStart, today));
-  for (;;) {
-    const entries = weekEntries(store, weekStart);
-    const counted = entries.filter((entry) => !isExcludedDuplicate(entry));
-    const candidates = entries.filter(isDuplicateCandidate).length;
-    const decided = entries.filter((entry) => entry.duplicate !== undefined && entry.duplicate.status !== "candidate").length;
-    const closed = reviewStatus(store, weekStart).state !== "not_closed";
-    const choices: Choice[] = [];
-    if (counted.some((entry) => entry.review_state === "unreviewed")) choices.push({ value: "confirm", name: "Confirm entries as reviewed" });
-    if (counted.length > 0) choices.push({ value: "classify", name: "Classify or correct an entry" });
-    if (candidates > 0) choices.push({ value: "duplicates", name: `Resolve duplicate candidates (${candidates})` });
-    if (decided > 0) choices.push({ value: "restore", name: "Reverse a duplicate decision" });
-    choices.push(
-      { value: "category", name: "Add a category" },
-      { value: "reflect", name: "Write the reflection" },
-      { value: "close", name: closed ? "Close the review again" : "Close the review" },
-      { value: "show", name: "Show the full week again" },
-      { value: EXIT, name: "Exit (exiting does not close the review)" },
-    );
+  // Each confirmed action is saved at once; a later error must say so.
+  let saved = 0;
+  try {
+    for (;;) {
+      const entries = weekEntries(store, weekStart);
+      const counted = entries.filter((entry) => !isExcludedDuplicate(entry));
+      const candidates = entries.filter(isDuplicateCandidate).length;
+      const decided = entries.filter((entry) => entry.duplicate !== undefined && entry.duplicate.status !== "candidate").length;
+      const closed = reviewStatus(store, weekStart).state !== "not_closed";
+      const choices: Choice[] = [];
+      if (counted.some((entry) => entry.review_state === "unreviewed")) choices.push({ value: "confirm", name: "Confirm entries as reviewed" });
+      if (counted.length > 0) choices.push({ value: "classify", name: "Classify or correct an entry" });
+      if (candidates > 0) choices.push({ value: "duplicates", name: `Resolve duplicate candidates (${candidates})` });
+      if (decided > 0) choices.push({ value: "restore", name: "Reverse a duplicate decision" });
+      choices.push(
+        { value: "category", name: "Add a category" },
+        { value: "reflect", name: "Write the reflection" },
+        { value: "close", name: closed ? "Close the review again" : "Close the review" },
+        { value: "show", name: "Show the full week again" },
+        { value: EXIT, name: "Exit (exiting does not close the review)" },
+      );
 
-    const action = await context.prompter.select(`Review ${weekStart}: what next?`, choices, EXIT);
-    switch (action) {
-      case "confirm":
-        await confirmFlow(context, store, entries);
-        break;
-      case "classify": {
-        const id = await context.prompter.select(
-          "Which entry?",
-          counted.map((entry) => ({ value: entry.id, name: describeEntry(store, entry) })),
-        );
-        const entry = counted.find((candidate) => candidate.id === id);
-        if (entry !== undefined) await classifyFlow(context, store, entry);
-        break;
+      const action = await context.prompter.select(`Review ${weekStart}: what next?`, choices, EXIT);
+      switch (action) {
+        case "confirm":
+          if (await confirmFlow(context, store, entries)) saved += 1;
+          break;
+        case "classify": {
+          const id = await context.prompter.select(
+            "Which entry?",
+            counted.map((entry) => ({ value: entry.id, name: describeEntry(store, entry) })),
+          );
+          const entry = counted.find((candidate) => candidate.id === id);
+          if (entry !== undefined && (await classifyFlow(context, store, entry))) saved += 1;
+          break;
+        }
+        case "duplicates":
+          if (await duplicatesFlow(context, store, entries)) saved += 1;
+          break;
+        case "restore":
+          if (await restoreFlow(context, store, entries)) saved += 1;
+          break;
+        case "category":
+          if (await addCategoryFlow(context, store)) saved += 1;
+          break;
+        case "reflect":
+          if (await reflectionFlow(context, store, weekStart)) saved += 1;
+          break;
+        case "close":
+          if (await closeFlow(context, store, weekStart)) saved += 1;
+          break;
+        case "show":
+          context.out(renderWeek(store, weekStart, today));
+          break;
+        default:
+          context.out(closed ? "Exited." : "Exited. The review is not closed; run the same command to resume.");
+          return;
       }
-      case "duplicates":
-        await duplicatesFlow(context, store, entries);
-        break;
-      case "restore":
-        await restoreFlow(context, store, entries);
-        break;
-      case "category":
-        await addCategoryFlow(context, store);
-        break;
-      case "reflect":
-        await reflectionFlow(context, store, weekStart);
-        break;
-      case "close":
-        await closeFlow(context, store, weekStart);
-        break;
-      case "show":
-        context.out(renderWeek(store, weekStart, today));
-        break;
-      default:
-        context.out(closed ? "Exited." : "Exited. The review is not closed; run the same command to resume.");
-        return;
+      store = await loadStore(context.paths);
     }
-    store = await loadStore(context.paths);
+  } catch (error) {
+    throw afterSavedActions(error, saved);
   }
 }

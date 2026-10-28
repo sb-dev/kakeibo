@@ -57,6 +57,12 @@ function link(store: Store, entryIds: readonly string[], now: Timestamp): Store 
   return addLinkHistory({ ...store, goal_contribution_links: links }, "goal_link_added", first, joined, now);
 }
 
+/** The entries sharing an entry's Savings-goal link, or "" when it has none. */
+function linkSignature(store: Store, entryId: string): string {
+  const found = store.goal_contribution_links.find((candidate) => candidate.entry_ids.includes(entryId));
+  return found === undefined ? "" : `${found.id}:${[...found.entry_ids].sort().join(",")}`;
+}
+
 /**
  * Apply a classification correction, with any Savings-goal link change, as one action.
  * Returns plain-words problems and leaves the store unchanged when any rule fails.
@@ -94,11 +100,22 @@ export function applyEntryCorrection(
   }
   if (correction.link !== undefined && correction.link.length > 0) next = link(next, correction.link, now);
 
+  // An entry whose Savings-goal link membership changed is revised even when its classification did
+  // not, so a closed week that holds it shows "changed since review" (PRD §4.4).
+  const relinked = new Set(
+    [...store.entries.map((entry) => entry.id)].filter((id) => linkSignature(store, id) !== linkSignature(next, id)),
+  );
   const changed: Entry[] = [];
   for (const { id, classification } of correction.entries) {
     const entry = findEntry(next, id) as Entry;
-    if (sameClassification(entry, classification) && entry.review_state === correction.review) continue;
+    if (sameClassification(entry, classification) && entry.review_state === correction.review && !relinked.has(id)) continue;
     const result = reviseEntry(next, id, (current) => ({ ...current, ...classification, review_state: correction.review }), { kind: "entry_classified", now });
+    next = result.store;
+    changed.push(result.entry);
+  }
+  for (const id of relinked) {
+    if (correction.entries.some((target) => target.id === id)) continue;
+    const result = reviseEntry(next, id, (current) => current, { kind: "entry_classified", now, note: "Savings-goal link changed" });
     next = result.store;
     changed.push(result.entry);
   }

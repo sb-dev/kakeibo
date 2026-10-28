@@ -1,6 +1,6 @@
 import { findEntry, isDuplicateCandidate } from "@kakeibo/domain";
 import type { CommandContext } from "../context.ts";
-import { CliError, NotInteractiveError } from "../errors.ts";
+import { CliError, NotInteractiveError, afterSavedActions } from "../errors.ts";
 import type { Choice } from "../prompts/prompter.ts";
 import { classifyFlow, confirmFlow, duplicateEntryFlow, reusedSources, reverseReuseFlow } from "../review/actions.ts";
 import { renderEntryDetail } from "../review/render.ts";
@@ -18,35 +18,41 @@ export async function runEdit(context: CommandContext, entryId: string): Promise
     throw new NotInteractiveError("edit", "Use `kakeibo review --week <monday> --show` to see entries without prompts.");
   }
   let store = await loadStore(context.paths);
-  for (;;) {
-    const entry = findEntry(store, id);
-    if (entry === undefined) {
-      throw new CliError(`No entry ${id}. Entry IDs appear in \`kakeibo review --show\`.`);
-    }
-    context.out(renderEntryDetail(store, entry));
-    const choices: Choice[] = [{ value: "classify", name: "Change type, treatment or category" }];
-    if (entry.review_state === "unreviewed" && !isDuplicateCandidate(entry)) choices.push({ value: "confirm", name: "Confirm as reviewed" });
-    choices.push({ value: "duplicate", name: entry.duplicate === undefined || entry.duplicate.status === "candidate" ? "Duplicate decision" : "Reverse the duplicate decision" });
-    if (reusedSources(store, entry).length > 0) choices.push({ value: "reverse", name: "Reverse an incorrect source reuse" });
-    choices.push({ value: DONE, name: "Done" });
+  // Each confirmed action is saved at once; a later error must say so.
+  let saved = 0;
+  try {
+    for (;;) {
+      const entry = findEntry(store, id);
+      if (entry === undefined) {
+        throw new CliError(`No entry ${id}. Entry IDs appear in \`kakeibo review --show\`.`);
+      }
+      context.out(renderEntryDetail(store, entry));
+      const choices: Choice[] = [{ value: "classify", name: "Change type, treatment or category" }];
+      if (entry.review_state === "unreviewed" && !isDuplicateCandidate(entry)) choices.push({ value: "confirm", name: "Confirm as reviewed" });
+      choices.push({ value: "duplicate", name: entry.duplicate === undefined || entry.duplicate.status === "candidate" ? "Duplicate decision" : "Reverse the duplicate decision" });
+      if (reusedSources(store, entry).length > 0) choices.push({ value: "reverse", name: "Reverse an incorrect source reuse" });
+      choices.push({ value: DONE, name: "Done" });
 
-    const action = await context.prompter.select(`Edit ${entry.id}: what next?`, choices, DONE);
-    switch (action) {
-      case "classify":
-        await classifyFlow(context, store, entry);
-        break;
-      case "confirm":
-        await confirmFlow(context, store, [entry]);
-        break;
-      case "duplicate":
-        await duplicateEntryFlow(context, store, entry);
-        break;
-      case "reverse":
-        await reverseReuseFlow(context, store, entry);
-        break;
-      default:
-        return;
+      const action = await context.prompter.select(`Edit ${entry.id}: what next?`, choices, DONE);
+      switch (action) {
+        case "classify":
+          if (await classifyFlow(context, store, entry)) saved += 1;
+          break;
+        case "confirm":
+          if (await confirmFlow(context, store, [entry])) saved += 1;
+          break;
+        case "duplicate":
+          if (await duplicateEntryFlow(context, store, entry)) saved += 1;
+          break;
+        case "reverse":
+          if (await reverseReuseFlow(context, store, entry)) saved += 1;
+          break;
+        default:
+          return;
+      }
+      store = await loadStore(context.paths);
     }
-    store = await loadStore(context.paths);
+  } catch (error) {
+    throw afterSavedActions(error, saved);
   }
 }

@@ -159,9 +159,14 @@ function weekSpending(store: Store, weekStart: IsoDate, entries: readonly Entry[
   const sum = (purpose: Entry["purpose"]): Pence =>
     sumPence(entries.filter((entry) => entry.purpose === purpose && entry.duplicate?.status !== "excluded").map((entry) => entry.source.amount));
   const contributions = goalContributions(store, weekStart, weekEndOf(weekStart));
+  // A contribution is reviewed only when every linked account side is reviewed (Financial Model §§6.3, 7.1).
+  const contributionTotal = (reviewed: boolean): string => {
+    const chosen = contributions.filter((contribution) => contribution.reviewed === reviewed);
+    return `${formatPence(sumPence(chosen.map((contribution) => contribution.amount)))} (${chosen.length})`;
+  };
   lines.push(
-    `Not spending: income ${formatPence(sum("income"))} · transfers ${formatPence(sum("transfer"))} · ` +
-      `Savings-goal contributions ${formatPence(sumPence(contributions.map((contribution) => contribution.amount)))} (${contributions.length}, counted once per transfer)`,
+    `Not spending: income ${formatPence(sum("income"))} · transfers ${formatPence(sum("transfer"))}`,
+    `Savings-goal contributions, counted once per transfer: reviewed ${contributionTotal(true)} · unreviewed ${contributionTotal(false)}`,
   );
   return lines;
 }

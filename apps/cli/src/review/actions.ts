@@ -42,6 +42,7 @@ import { classificationLabel, describeEntry, entryGrid, selectionTotal, typeLabe
  * Interactive review actions shared by `review` and `edit` (PRD §4.4). Each action previews its
  * effect, asks for confirmation and saves at once, so an interrupted session loses nothing that
  * was confirmed. Domain rules run before the preview and again inside the locked save.
+ * Each action returns whether it saved.
  */
 
 const NEW_CATEGORY = "__new__";
@@ -161,10 +162,10 @@ function describeAfter(store: Store, target: Target): string {
  * settlements and explicit Savings-goal contributions. A reviewed entry stays reviewed only when
  * the user confirms the new classification; otherwise it becomes unreviewed.
  */
-export async function classifyFlow(context: CommandContext, store: Store, entry: Entry): Promise<void> {
+export async function classifyFlow(context: CommandContext, store: Store, entry: Entry): Promise<boolean> {
   if (isExcludedDuplicate(entry)) {
     context.out(`${entry.id} is an excluded duplicate. Reverse that decision before changing its classification.`);
-    return;
+    return false;
   }
   const types = entryTypesFor(entry.source.source_movement);
   const typeId = await context.prompter.select(
@@ -235,7 +236,7 @@ export async function classifyFlow(context: CommandContext, store: Store, entry:
   });
   if (unchanged && link === undefined && unlink === undefined) {
     context.out(`No change to ${entry.id}.`);
-    return;
+    return false;
   }
 
   context.out("Classification change:");
@@ -267,7 +268,7 @@ export async function classifyFlow(context: CommandContext, store: Store, entry:
   const decision = await context.prompter.select("Save this change?", choices, "cancel");
   if (decision === "cancel") {
     context.out("Not saved.");
-    return;
+    return false;
   }
 
   const correction = {
@@ -280,10 +281,11 @@ export async function classifyFlow(context: CommandContext, store: Store, entry:
   const dryRun = applyClassification(store, targets, correction, now);
   if (!dryRun.ok) {
     reportProblems(context, dryRun.error);
-    return;
+    return false;
   }
   await save(context, store, targets.map((target) => target.id), (current) => applyClassification(current, targets, correction, now));
   context.out(`Saved ${plural(targets.length, "entry", "entries")} as ${correction.review}.`);
+  return true;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -293,7 +295,7 @@ export async function classifyFlow(context: CommandContext, store: Store, entry:
  * Bulk or individual confirmation (PRD §4.4 step 3): show the selected entries, their count and
  * total; Unclassified entries need explicit acceptance; duplicate candidates are blocked.
  */
-export async function confirmFlow(context: CommandContext, store: Store, entries: readonly Entry[]): Promise<void> {
+export async function confirmFlow(context: CommandContext, store: Store, entries: readonly Entry[]): Promise<boolean> {
   const unreviewed = entries.filter((entry) => entry.review_state === "unreviewed");
   const blocked = unreviewed.filter(isDuplicateCandidate);
   const eligible = unreviewed.filter((entry) => !isDuplicateCandidate(entry));
@@ -302,7 +304,7 @@ export async function confirmFlow(context: CommandContext, store: Store, entries
   }
   if (eligible.length === 0) {
     context.out("Nothing to confirm.");
-    return;
+    return false;
   }
   const selectedIds = await context.prompter.checkbox(
     "Select entries to confirm as reviewed",
@@ -311,7 +313,7 @@ export async function confirmFlow(context: CommandContext, store: Store, entries
   let selected = eligible.filter((entry) => selectedIds.includes(entry.id));
   if (selected.length === 0) {
     context.out("Nothing selected. Nothing was saved.");
-    return;
+    return false;
   }
   context.out(`Selected ${plural(selected.length, "entry", "entries")} · ${selectionTotal(selected)}`);
   context.out(entryGrid(store, selected));
@@ -327,7 +329,7 @@ export async function confirmFlow(context: CommandContext, store: Store, entries
       selected = selected.filter((entry) => entry.treatment !== "unclassified");
       if (selected.length === 0) {
         context.out("Nothing left to confirm. Nothing was saved.");
-        return;
+        return false;
       }
       context.out(`Still selected: ${plural(selected.length, "entry", "entries")} · ${selectionTotal(selected)}`);
     }
@@ -335,12 +337,13 @@ export async function confirmFlow(context: CommandContext, store: Store, entries
   const confirmed = await context.prompter.confirm(`Mark ${plural(selected.length, "entry", "entries")} (${selectionTotal(selected)}) reviewed?`, false);
   if (!confirmed) {
     context.out("Not saved.");
-    return;
+    return false;
   }
   const ids = selected.map((entry) => entry.id);
   const now = context.now().toISOString();
   await save(context, store, ids, (current) => confirmEntries(current, ids, { acceptUnclassified }, now));
   context.out(`Saved: ${plural(ids.length, "entry", "entries")} marked reviewed.`);
+  return true;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -374,29 +377,32 @@ function renderDecisions(context: CommandContext, store: Store, decisions: reado
   }
 }
 
-async function confirmDecisions(context: CommandContext, store: Store, decisions: readonly DuplicateDecision[]): Promise<void> {
+async function confirmDecisions(context: CommandContext, store: Store, decisions: readonly DuplicateDecision[]): Promise<boolean> {
   renderDecisions(context, store, decisions);
   const now = context.now().toISOString();
   const dryRun = applyDuplicateDecisions(store, decisions, now);
   if (!dryRun.ok) {
     reportProblems(context, dryRun.error);
-    return;
+    return false;
   }
   if (!(await context.prompter.confirm(`Apply ${plural(decisions.length, "duplicate decision")}?`, false))) {
     context.out("Not saved.");
-    return;
+    return false;
   }
-  const ids = decisions.map((decision) => decision.entry_id);
+  // The preview showed each retained entry too, so a change to one of them also invalidates the decision.
+  const retained = decisions.map((decision) => decision.of_entry_id ?? findEntry(store, decision.entry_id)?.duplicate?.of_entry_id);
+  const ids = [...new Set([...decisions.map((decision) => decision.entry_id), ...retained.filter((id): id is string => id !== undefined)])];
   await save(context, store, ids, (current) => applyDuplicateDecisions(current, decisions, now));
   context.out(`Saved ${plural(decisions.length, "duplicate decision")}.`);
+  return true;
 }
 
 /** Bulk keep-both or exclude for the week's candidates, with per-row overrides (PRD §4.1). */
-export async function duplicatesFlow(context: CommandContext, store: Store, entries: readonly Entry[]): Promise<void> {
+export async function duplicatesFlow(context: CommandContext, store: Store, entries: readonly Entry[]): Promise<boolean> {
   const candidates = entries.filter(isDuplicateCandidate);
   if (candidates.length === 0) {
     context.out("No duplicate candidates in this week.");
-    return;
+    return false;
   }
   const chosenIds = await context.prompter.checkbox(
     "Select duplicate candidates to resolve now (unselected ones stay unresolved)",
@@ -405,7 +411,7 @@ export async function duplicatesFlow(context: CommandContext, store: Store, entr
   const chosen = candidates.filter((entry) => chosenIds.includes(entry.id));
   if (chosen.length === 0) {
     context.out("Nothing selected. Nothing was saved.");
-    return;
+    return false;
   }
   const bulk = (await context.prompter.select(`Decision for the ${plural(chosen.length, "selected entry", "selected entries")}`, [
     { value: "exclude", name: "Exclude as duplicates of their retained entries" },
@@ -418,7 +424,7 @@ export async function duplicatesFlow(context: CommandContext, store: Store, entr
       chosen.map((entry) => entryChoice(store, entry)),
     ),
   );
-  await confirmDecisions(
+  return confirmDecisions(
     context,
     store,
     chosen.map((entry) => ({ entry_id: entry.id, action: overrides.has(entry.id) ? opposite : bulk })),
@@ -426,39 +432,39 @@ export async function duplicatesFlow(context: CommandContext, store: Store, entr
 }
 
 /** Reverse keep-both or exclude decisions; restored entries become unreviewed candidates. */
-export async function restoreFlow(context: CommandContext, store: Store, entries: readonly Entry[]): Promise<void> {
+export async function restoreFlow(context: CommandContext, store: Store, entries: readonly Entry[]): Promise<boolean> {
   const decided = entries.filter((entry) => entry.duplicate !== undefined && entry.duplicate.status !== "candidate");
   if (decided.length === 0) {
     context.out("No duplicate decisions to reverse in this week.");
-    return;
+    return false;
   }
   const ids = await context.prompter.checkbox("Select duplicate decisions to reverse", decided.map((entry) => entryChoice(store, entry)));
-  await confirmRestore(context, store, ids);
+  return confirmRestore(context, store, ids);
 }
 
-async function confirmRestore(context: CommandContext, store: Store, ids: readonly string[]): Promise<void> {
+async function confirmRestore(context: CommandContext, store: Store, ids: readonly string[]): Promise<boolean> {
   if (ids.length === 0) {
     context.out("Nothing selected. Nothing was saved.");
-    return;
+    return false;
   }
   const selected = ids.map((id) => findEntry(store, id) as Entry);
   context.out(`Reverse ${plural(selected.length, "decision")} · ${selectionTotal(selected)}. The entries become unreviewed duplicate candidates again and count in unreviewed totals.`);
   context.out(entryGrid(store, selected));
   if (!(await context.prompter.confirm(`Reverse ${plural(selected.length, "duplicate decision")}?`, false))) {
     context.out("Not saved.");
-    return;
+    return false;
   }
   const now = context.now().toISOString();
   await save(context, store, ids, (current) => restoreDuplicates(current, ids, now));
   context.out(`Saved: ${plural(ids.length, "entry", "entries")} restored as unreviewed duplicate candidates.`);
+  return true;
 }
 
 /** The duplicate decision for one entry, from `edit`. */
-export async function duplicateEntryFlow(context: CommandContext, store: Store, entry: Entry): Promise<void> {
+export async function duplicateEntryFlow(context: CommandContext, store: Store, entry: Entry): Promise<boolean> {
   const status = entry.duplicate?.status;
   if (status === "kept" || status === "excluded") {
-    await confirmRestore(context, store, [entry.id]);
-    return;
+    return confirmRestore(context, store, [entry.id]);
   }
   const choices: Choice[] = [];
   if (status === "candidate") {
@@ -469,7 +475,7 @@ export async function duplicateEntryFlow(context: CommandContext, store: Store, 
   choices.push({ value: "exclude_other", name: `Exclude ${entry.id} as a duplicate of another entry (enter its ID)` });
   choices.push({ value: "back", name: "Back" });
   const action = await context.prompter.select("Duplicate decision", choices, "back");
-  if (action === "back") return;
+  if (action === "back") return false;
   let decision: DuplicateDecision;
   if (action === "exclude_other") {
     const retained = (await context.prompter.askText("ID of the entry to keep")).trim().toLowerCase();
@@ -477,13 +483,13 @@ export async function duplicateEntryFlow(context: CommandContext, store: Store, 
   } else {
     decision = { entry_id: entry.id, action: action === "keep_both" ? "keep_both" : "exclude" };
   }
-  await confirmDecisions(context, store, [decision]);
+  return confirmDecisions(context, store, [decision]);
 }
 
 // ---------------------------------------------------------------------------------------------
 // Categories, reflection and closure
 
-export async function addCategoryFlow(context: CommandContext, store: Store): Promise<void> {
+export async function addCategoryFlow(context: CommandContext, store: Store): Promise<boolean> {
   const treatments = TREATMENTS.filter((treatment) => treatment !== "unclassified");
   const treatment = (await context.prompter.select(
     "Treatment for the new category (a category never replaces an envelope)",
@@ -495,12 +501,12 @@ export async function addCategoryFlow(context: CommandContext, store: Store): Pr
   const checked = addCategory(store, treatment, name, now);
   if (!checked.ok) {
     reportProblems(context, [checked.error]);
-    return;
+    return false;
   }
   const label = `${TREATMENT_LABELS[treatment]} / ${checked.value.category.name}`;
   if (!(await context.prompter.confirm(`Add the category ${label}?`, false))) {
     context.out("Not saved.");
-    return;
+    return false;
   }
   await updateStore(context.paths, (current) => {
     const added = addCategory(current, treatment, name, now);
@@ -508,10 +514,11 @@ export async function addCategoryFlow(context: CommandContext, store: Store): Pr
     return { store: added.value.store, result: undefined };
   });
   context.out(`Saved category ${label}.`);
+  return true;
 }
 
 /** The two optional reflection prompts (PRD §4.4 step 5). Saving them never closes the review. */
-export async function reflectionFlow(context: CommandContext, store: Store, weekStart: IsoDate): Promise<void> {
+export async function reflectionFlow(context: CommandContext, store: Store, weekStart: IsoDate): Promise<boolean> {
   const previous = findReview(store, weekStart)?.reflection;
   const stood_out = await context.prompter.askText("What stood out? (optional)", previous?.stood_out);
   const next_change = await context.prompter.askText("What will you change next week? (optional)", previous?.next_change);
@@ -519,7 +526,7 @@ export async function reflectionFlow(context: CommandContext, store: Store, week
   context.out(`What will you change next week? ${next_change.trim() === "" ? "(empty)" : next_change.trim()}`);
   if (!(await context.prompter.confirm("Save the reflection?", false))) {
     context.out("Not saved.");
-    return;
+    return false;
   }
   const now = context.now().toISOString();
   await updateStore(context.paths, (current) => {
@@ -529,13 +536,14 @@ export async function reflectionFlow(context: CommandContext, store: Store, week
     return { store: saveReflection(current, weekStart, { stood_out, next_change }, now).store, result: undefined };
   });
   context.out("Saved the reflection. The review is not closed until you close it.");
+  return true;
 }
 
 /**
  * Explicit closure (PRD §4.4 step 4). Unresolved entries stay unreviewed; the closure records the
  * revision of every entry in the week so later changes are detected.
  */
-export async function closeFlow(context: CommandContext, store: Store, weekStart: IsoDate): Promise<void> {
+export async function closeFlow(context: CommandContext, store: Store, weekStart: IsoDate): Promise<boolean> {
   const entries = weekEntries(store, weekStart);
   const excluded = entries.filter(isExcludedDuplicate);
   const counted = entries.filter((entry) => !isExcludedDuplicate(entry));
@@ -547,7 +555,7 @@ export async function closeFlow(context: CommandContext, store: Store, weekStart
   }
   if (!(await context.prompter.confirm(`Close the review for ${weekStart}?`, false))) {
     context.out("Not closed.");
-    return;
+    return false;
   }
   const now = context.now().toISOString();
   const ids = entries.map((entry) => entry.id);
@@ -559,6 +567,7 @@ export async function closeFlow(context: CommandContext, store: Store, weekStart
     return { store: closeReview(current, weekStart, now).store, result: undefined };
   });
   context.out(`Closed the review for ${weekStart}. Later imports or corrections in this week will show it as changed since review.`);
+  return true;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -578,11 +587,11 @@ export function reusedSources(store: Store, entry: Entry): SourceRecord[] {
  * Reverse an incorrect reuse decision (Financial Model §10.3): the source row gets a separate
  * unreviewed entry; the retained entry keeps its ID, classification and review state.
  */
-export async function reverseReuseFlow(context: CommandContext, store: Store, entry: Entry): Promise<void> {
+export async function reverseReuseFlow(context: CommandContext, store: Store, entry: Entry): Promise<boolean> {
   const sources = reusedSources(store, entry);
   if (sources.length === 0) {
     context.out(`No source row reused ${entry.id}, so there is no reuse to reverse.`);
-    return;
+    return false;
   }
   const sourceId = await context.prompter.select(
     "Which source row was wrongly matched to this entry?",
@@ -599,7 +608,7 @@ export async function reverseReuseFlow(context: CommandContext, store: Store, en
   }
   if (!(await context.prompter.confirm(`Reverse the reuse of ${source.id}?`, false))) {
     context.out("Not saved.");
-    return;
+    return false;
   }
   const now = context.now().toISOString();
   const created = await updateStore(context.paths, (current) => {
@@ -611,4 +620,5 @@ export async function reverseReuseFlow(context: CommandContext, store: Store, en
     return { store: result.store, result: result.entry };
   });
   context.out(`Saved: ${source.id} now belongs to new unreviewed entry ${created.id}.`);
+  return true;
 }

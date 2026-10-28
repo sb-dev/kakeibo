@@ -162,6 +162,25 @@ describe("Savings-goal contributions", () => {
     expect(goalContributions(joined, WEEK, "2026-10-25" as IsoDate)).toHaveLength(1);
   });
 
+  it("flags a closed week when a later correction joins its entry to a link from another week", () => {
+    // The savings side posts on Monday 26 October; the current-account side on Sunday 25 October.
+    const rows: Row[] = [
+      { date: "2026-10-25", description: "TO SAVINGS", pounds: 200, direction: "outflow" },
+      { date: "2026-10-26", description: "FROM CURRENT", pounds: 200, direction: "inflow", account: "acct_002" },
+    ];
+    const nextWeek = "2026-10-26" as IsoDate;
+    let store = storeWith(rows);
+    store = value(applyEntryCorrection(store, { entries: [{ id: "tx_002", classification: goal(store) }], link: ["tx_002"], review: "reviewed" }, NOW)).store;
+    store = closeReview(store, nextWeek, NOW).store;
+    expect(goalContributions(store, nextWeek, "2026-11-01" as IsoDate).map((contribution) => contribution.amount)).toEqual([20000]);
+
+    store = value(applyEntryCorrection(store, { entries: [{ id: "tx_001", classification: goal(store) }, { id: "tx_002", classification: goal(store) }], link: ["tx_001", "tx_002"], review: "reviewed" }, LATER)).store;
+    expect(goalContributions(store, nextWeek, "2026-11-01" as IsoDate)).toEqual([]);
+    expect(reviewStatus(store, nextWeek)).toMatchObject({ state: "changed_since_review", added: [], removed: [], revised: ["tx_002"] });
+    expect(store.reviews[0]?.closures).toHaveLength(1);
+    expectValid(store);
+  });
+
   it("rejects mismatched sides and goal contributions without a link", () => {
     const store = storeWith(WEEK_ROWS);
     const mismatched = applyEntryCorrection(store, { entries: [{ id: "tx_001", classification: goal(store) }, { id: "tx_004", classification: goal(store) }], link: ["tx_001", "tx_004"], review: "unreviewed" }, NOW);

@@ -104,7 +104,7 @@ The report (also printed by `--show`) contains:
 
 - the period, marked **in progress** for the current week, and the closure status: not closed, closed, or **changed since review**;
 - net spending per treatment (Fixed, Needs, Wants, Culture, Unexpected, Outside plan, Unclassified), split into reviewed and unreviewed; refunds reduce spending and are never income;
-- income, transfers and Savings-goal contributions, which are not spending;
+- income, transfers and Savings-goal contributions, which are not spending. Contributions are split into reviewed and unreviewed; a contribution is reviewed only when every linked account side is;
 - unresolved (Unclassified) entries and duplicate candidates with the entry each one may duplicate;
 - every entry, grouped by day;
 - month-to-date limits, reviewed and unreviewed spending and reviewed remaining for each month in the week, using that month's plan. A week that crosses a month end shows both months; a missing plan is labelled;
@@ -161,7 +161,7 @@ Every save validates the current store, writes the new store to a temporary file
 
 ## Error messages and exit codes
 
-Every error says what went wrong and ends with **No data was changed.** or **Data was saved.**
+Every error says what went wrong and ends with **No data was changed.** or **Data was saved.** In `review` and `edit`, each confirmed action is saved at once; if a later prompt is cancelled or fails, the message says how many earlier actions in the session were saved and that the interrupted one was not.
 
 | Exit code | Meaning |
 |---|---|

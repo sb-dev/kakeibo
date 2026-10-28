@@ -3,12 +3,26 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addPlanRevision, findEntry, pence, reviseEntry, savingsGoal, validatePlan, type Entry, type Month, type Store } from "@kakeibo/domain";
+import {
+  addPlanRevision,
+  applyEntryCorrection,
+  findCategory,
+  findEntry,
+  pence,
+  reviseEntry,
+  savingsGoal,
+  validatePlan,
+  type Classification,
+  type Entry,
+  type Month,
+  type Store,
+} from "@kakeibo/domain";
 import type { CommandContext } from "../context.ts";
-import { CliError, NotInteractiveError, UsageError } from "../errors.ts";
+import { CancelledError, CliError, EXIT_CODES, NotInteractiveError, UsageError } from "../errors.ts";
 import { scriptedPrompter, type Prompter, type ScriptedAnswer } from "../prompts/prompter.ts";
 import { storePaths, type StorePaths } from "../storage/paths.ts";
 import { initStore, loadStore, updateStore } from "../storage/store-file.ts";
+import { runEdit } from "./edit.ts";
 import { runImport } from "./import.ts";
 import { runReview } from "./review.ts";
 
@@ -104,7 +118,7 @@ describe("review --week validation and --show", () => {
     expect(text).toContain("Week 2026-10-19 to 2026-10-25\nReview: not closed");
     expect(text).toContain("Entries: 7 · reviewed 0 · unreviewed 7 · excluded duplicates 0");
     expect(text).toMatch(/Unclassified\s+£0\.00\s+£396\.40/);
-    expect(text).toContain("Not spending: income £10.00 · transfers £0.00 · Savings-goal contributions £0.00 (0, counted once per transfer)");
+    expect(text).toContain("Not spending: income £10.00 · transfers £0.00\nSavings-goal contributions, counted once per transfer: reviewed £0.00 (0) · unreviewed £0.00 (0)");
     expect(text).toContain("Unresolved classifications: 7 (£396.40 money out, £10.00 money in)");
     expect(text).toMatch(/Sat 2026-10-24\s+tx_006\s+Corner Cafe\s+-£3\.20/);
     expect(text).toMatch(/Sun 2026-10-25\s+no imported activity/);
@@ -209,7 +223,7 @@ describe("review (interactive)", () => {
     const shown = makeContext([], false);
     await runReview(shown.context, { week: WEEK, show: true });
     const text = shown.out.join("\n");
-    expect(text).toContain("Not spending: income £10.00 · transfers £120.00 · Savings-goal contributions £200.00 (1, counted once per transfer)");
+    expect(text).toContain("Not spending: income £10.00 · transfers £120.00\nSavings-goal contributions, counted once per transfer: reviewed £200.00 (1) · unreviewed £0.00 (0)");
     expect(text).toMatch(/Unclassified\s+£0\.00\s+£76\.40/);
   });
 
@@ -279,5 +293,81 @@ describe("review (interactive)", () => {
     expect(error).toBeInstanceOf(CliError);
     expect((error as CliError).fullMessage).toContain("tx_001 changed while you were deciding. Nothing was saved from this action");
     expect(entry(await loadStore(paths), "tx_001")).toMatchObject({ treatment: "unclassified", revision: 2 });
+  });
+
+  it("separates reviewed and unreviewed Savings-goal contributions, counting a pair once", async () => {
+    await importWeek();
+    await importSavings();
+    await updateStore(paths, (store) => {
+      const goal: Classification = { movement: "transfer", purpose: "goal_contribution", treatment: "goal", category_id: findCategory(store, "goal", "Savings")?.id as string };
+      const apply = (current: Store, ids: string[], review: "reviewed" | "unreviewed", link?: string[]): Store => {
+        const result = applyEntryCorrection(current, { entries: ids.map((id) => ({ id, classification: goal })), review, ...(link === undefined ? {} : { link }) }, NOW.toISOString());
+        if (!result.ok) throw new Error(result.error.join("; "));
+        return result.value.store;
+      };
+      // A reviewed pair whose savings side is then made unreviewed, and a reviewed one-sided link.
+      let next = apply(store, ["tx_004", "tx_010"], "reviewed", ["tx_004", "tx_010"]);
+      next = apply(next, ["tx_010"], "unreviewed");
+      next = apply(next, ["tx_005"], "reviewed", ["tx_005"]);
+      return { store: next, result: undefined };
+    });
+    const { context, out } = makeContext([], false);
+    await runReview(context, { week: WEEK, show: true });
+    expect(out.join("\n")).toContain("Savings-goal contributions, counted once per transfer: reviewed £120.00 (1) · unreviewed £200.00 (1)");
+  });
+
+  it("refuses a duplicate exclusion when the retained entry changed after the preview", async () => {
+    await importWeek();
+    await markCandidate("tx_007", "tx_006");
+    const { context } = makeContext(["duplicate", "exclude", true], true, (prompter) => ({
+      ...prompter,
+      async confirm(message, defaultValue) {
+        if (message.startsWith("Apply")) {
+          await updateStore(paths, (store) => ({
+            store: reviseEntry(store, "tx_006", (current) => ({ ...current, source: { ...current.source, description: "Different purchase", amount: pence(9999) } }), {
+              kind: "entry_source_replaced",
+              now: NOW.toISOString(),
+            }).store,
+            result: undefined,
+          }));
+        }
+        return prompter.confirm(message, defaultValue);
+      },
+    }));
+    const error = await runEdit(context, "tx_007").catch((caught: unknown) => caught);
+    expect((error as CliError).fullMessage).toBe(
+      "tx_007, tx_006 changed while you were deciding. Nothing was saved from this action; run the command again to see the current state. No data was changed.",
+    );
+    const store = await loadStore(paths);
+    expect(entry(store, "tx_007")).toMatchObject({ duplicate: { status: "candidate", of_entry_id: "tx_006" }, review_state: "unreviewed" });
+    expect(entry(store, "tx_006")).toMatchObject({ source: { description: "Different purchase", amount: 9999 } });
+  });
+
+  it("says that earlier confirmed actions stay saved when a later prompt is cancelled", async () => {
+    await importWeek();
+    const cancelAtSecondMenu = (prompter: Prompter): Prompter => {
+      let menus = 0;
+      return {
+        ...prompter,
+        async select(message, choices, defaultValue) {
+          if (message.endsWith("what next?") && ++menus === 2) throw new CancelledError();
+          return prompter.select(message, choices, defaultValue);
+        },
+      };
+    };
+    const review = await runReview(makeContext(["confirm", ["tx_001"], true, true], true, cancelAtSecondMenu).context, { week: WEEK }).catch((caught: unknown) => caught);
+    expect((review as CliError).fullMessage).toBe("Cancelled. 1 earlier confirmed action in this session was saved; the interrupted action was not.");
+    expect((review as CliError).exitCode).toBe(EXIT_CODES.interrupted);
+    expect(entry(await loadStore(paths), "tx_001").review_state).toBe("reviewed");
+
+    const edit = await runEdit(makeContext(["confirm", ["tx_002"], true, true], true, cancelAtSecondMenu).context, "tx_002").catch((caught: unknown) => caught);
+    expect((edit as CliError).fullMessage).toBe("Cancelled. 1 earlier confirmed action in this session was saved; the interrupted action was not.");
+    expect(entry(await loadStore(paths), "tx_002").review_state).toBe("reviewed");
+
+    const cancelFirst = await runReview(
+      makeContext([], true, (prompter) => ({ ...prompter, select: async () => Promise.reject(new CancelledError()) })).context,
+      { week: WEEK },
+    ).catch((caught: unknown) => caught);
+    expect((cancelFirst as CliError).fullMessage).toBe("Cancelled. No data was changed.");
   });
 });
