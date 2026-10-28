@@ -4,13 +4,12 @@ import type { IsoDate, Month } from "../periods/periods.ts";
 
 /**
  * Versioned local store. Keys use snake_case to mirror Financial Model §5 names.
- * Collections that later tasks populate (contribution links, reviews) are present but
- * empty in schema version 1.
+ * Fields added after the first release of schema version 1 are optional, so earlier stores stay valid.
  */
 export const SCHEMA_VERSION = 1;
 export const STORE_CURRENCY = "GBP";
 
-export const ID_PREFIXES = ["acct", "map", "imp", "src", "tx", "cat", "goal", "rev", "hist"] as const;
+export const ID_PREFIXES = ["acct", "map", "imp", "src", "tx", "cat", "goal", "link", "rev", "hist"] as const;
 export type IdPrefix = (typeof ID_PREFIXES)[number];
 
 /** ISO 8601 timestamp with timezone, e.g. 2026-10-28T10:01:02.000Z. */
@@ -193,8 +192,15 @@ export type SourceRecord = {
   readonly match: SourceMatch;
 };
 
+export const DUPLICATE_STATUSES = ["candidate", "kept", "excluded"] as const;
+
+/**
+ * A financial duplicate decision (Financial Model §10.2), separate from source reuse.
+ * `candidate` is unresolved; `kept` keeps both entries; `excluded` contributes zero to totals.
+ * `of_entry_id` is the retained entry the decision refers to.
+ */
 export type DuplicateState = {
-  readonly status: "candidate";
+  readonly status: (typeof DUPLICATE_STATUSES)[number];
   readonly of_entry_id: string;
 };
 
@@ -212,17 +218,70 @@ export type Entry = {
   readonly category_id: string;
   readonly review_state: ReviewState;
   readonly duplicate?: DuplicateState;
+  /** Increases with every explicit change. Absent means 1 (entries saved before T3). */
+  readonly revision?: number;
   readonly created_at: Timestamp;
 };
 
-export type HistoryKind = "plan_confirmed" | "entry_source_replaced" | "entry_source_restored" | "source_reuse_reversed";
+/**
+ * An explicitly confirmed contribution to the Savings goal (Financial Model §6.3, PRD §4.3).
+ * When both account sides of one transfer are imported, both entries share one link,
+ * so the contribution counts once.
+ */
+export type GoalContributionLink = {
+  readonly id: string;
+  readonly goal_id: string;
+  readonly entry_ids: readonly string[];
+  readonly linked_at: Timestamp;
+};
+
+/** The revision of one entry when a review was closed. */
+export type ClosedEntry = {
+  readonly entry_id: string;
+  readonly revision: number;
+};
+
+export type ReviewClosure = {
+  readonly closed_at: Timestamp;
+  readonly entries: readonly ClosedEntry[];
+};
+
+export type ReviewReflection = {
+  readonly stood_out?: string;
+  readonly next_change?: string;
+};
+
+/** A Monday–Sunday weekly review. Closures are appended; earlier closures and notes are kept. */
+export type WeeklyReview = {
+  readonly id: string;
+  readonly week_start: IsoDate;
+  readonly reflection?: ReviewReflection;
+  readonly closures: readonly ReviewClosure[];
+  readonly created_at: Timestamp;
+};
+
+export type HistoryKind =
+  | "plan_confirmed"
+  | "entry_source_replaced"
+  | "entry_source_restored"
+  | "source_reuse_reversed"
+  | "entry_classified"
+  | "entry_confirmed"
+  | "duplicate_excluded"
+  | "duplicate_kept"
+  | "duplicate_restored"
+  | "goal_link_added"
+  | "goal_link_removed"
+  | "category_created"
+  | "review_reflection_saved"
+  | "review_closed";
 
 /** Explains an explicit change: what changed, when and from/to what. */
 export type HistoryRecord = {
   readonly id: string;
   readonly at: Timestamp;
   readonly kind: HistoryKind;
-  readonly subject_type: "plan" | "entry" | "source_record";
+  readonly subject_type: "plan" | "entry" | "source_record" | "category" | "goal_link" | "review";
   readonly subject_id: string;
   readonly before: unknown;
   readonly after: unknown;
@@ -242,7 +301,7 @@ export type Store = {
   readonly categories: readonly Category[];
   readonly goals: readonly Goal[];
   readonly plans: readonly MonthPlan[];
-  readonly goal_contribution_links: readonly unknown[];
-  readonly reviews: readonly unknown[];
+  readonly goal_contribution_links: readonly GoalContributionLink[];
+  readonly reviews: readonly WeeklyReview[];
   readonly history: readonly HistoryRecord[];
 };

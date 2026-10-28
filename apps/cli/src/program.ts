@@ -1,7 +1,9 @@
 import { Command } from "commander";
+import { runEdit } from "./commands/edit.ts";
 import { runImport } from "./commands/import.ts";
 import { runInit } from "./commands/init.ts";
 import { runPlan } from "./commands/plan.ts";
+import { runReview } from "./commands/review.ts";
 import type { CommandContext } from "./context.ts";
 import { inquirerPrompter } from "./prompts/inquirer-prompter.ts";
 import { resolveDataDir, storePaths } from "./storage/paths.ts";
@@ -58,6 +60,23 @@ export function createProgram(createContext: ContextFactory = defaultContextFact
     .option("--remap", "ask for the column mapping again, for example after the export format changed")
     .action(async (file: string, options: { account: string; remap?: boolean }) => {
       await runImport(context(), file, options);
+    });
+
+  program
+    .command("review")
+    .description("Open or resume the Monday–Sunday review: confirm and correct entries, resolve duplicates, reflect and close.")
+    .option("--week <YYYY-MM-DD>", "the Monday that starts the week (default: the current local week)")
+    .option("--show", "display totals, entries, reflection and closure status without prompts")
+    .action(async (options: { week?: string; show?: boolean }) => {
+      await runReview(context(), options);
+    });
+
+  program
+    .command("edit")
+    .description("Correct an entry's type, treatment/category, review state, duplicate decision or source-reuse decision.")
+    .argument("<entry-id>", "an entry ID shown by review, for example tx_014")
+    .action(async (entryId: string) => {
+      await runEdit(context(), entryId);
     });
 
   return program;

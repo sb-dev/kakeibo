@@ -13,7 +13,9 @@ import {
   type Month,
   type Store,
 } from "@kakeibo/domain";
+import { runEdit } from "../commands/edit.ts";
 import { runImport } from "../commands/import.ts";
+import { runReview } from "../commands/review.ts";
 import type { CommandContext } from "../context.ts";
 import { CliError, CorruptStoreError, LockHeldError, StoreExistsError, StoreMissingError } from "../errors.ts";
 import { scriptedPrompter, type ScriptedAnswer } from "../prompts/prompter.ts";
@@ -291,5 +293,75 @@ describe("imports", () => {
     expect(record).toMatchObject({ file_name: "statement.csv", row_count: 5 });
     expect(record?.file_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(store.mappings.find((candidate) => candidate.id === record?.mapping_id)).toMatchObject({ date_format: "YYYY-MM-DD", amount: { money_out_sign: "negative" } });
+  });
+});
+
+describe("weekly reviews", () => {
+  const fixtures = fileURLToPath(new URL("../../../../fixtures/synthetic-financial-data/csv/", import.meta.url));
+  const mapping: ScriptedAnswer[] = [null, "Date", "YYYY-MM-DD", "Description", "signed", "Amount", "negative", "", "", ""];
+  const WEEK = "2026-10-19";
+
+  /** Each call is a separate process run: a fresh context that reads the store from disk. */
+  function run(answers: readonly ScriptedAnswer[], interactive = true): { context: CommandContext; out: string[] } {
+    const out: string[] = [];
+    return {
+      out,
+      context: { paths, out: (line) => out.push(line), err: (line) => out.push(line), now: () => new Date(NOW), interactive, prompter: scriptedPrompter(answers) },
+    };
+  }
+
+  async function show(): Promise<string> {
+    const shown = run([], false);
+    await runReview(shown.context, { week: WEEK, show: true });
+    return shown.out.join("\n");
+  }
+
+  beforeEach(async () => {
+    await initStore(paths, NOW);
+    await runImport(run([...mapping, "unknown", true]).context, `${fixtures}review-week.csv`, { account: "current" });
+  });
+
+  it("keeps a confirmed action after an interruption and resumes from disk", async () => {
+    // The script ends after the confirmation, as if the terminal closed at the next menu.
+    const interrupted = run(["confirm", ["tx_001", "tx_002"], true, true]);
+    await expect(runReview(interrupted.context, { week: WEEK })).rejects.toThrow("scripted prompter has no answer");
+    const reloaded = await loadStore(paths);
+    expect(reloaded.entries.filter((entry) => entry.review_state === "reviewed").map((entry) => entry.id)).toEqual(["tx_001", "tx_002"]);
+    expect(await show()).toContain("Entries: 7 · reviewed 2 · unreviewed 5 · excluded duplicates 0\n");
+
+    const resumed = run(["confirm", ["tx_003"], true, true, "exit"]);
+    await runReview(resumed.context, { week: WEEK });
+    expect((await loadStore(paths)).entries.filter((entry) => entry.review_state === "reviewed")).toHaveLength(3);
+  });
+
+  it("closes with unresolved entries, then flags later imports and edits without losing notes", async () => {
+    await runReview(run(["reflect", "Card payment was large", "Check the card statement", true, "close", true, "exit"]).context, { week: WEEK });
+    const closed = await loadStore(paths);
+    expect(closed.entries.every((entry) => entry.review_state === "unreviewed")).toBe(true);
+    expect(await show()).toContain("Review: closed 2026-10-28T10:00:00.000Z");
+
+    await runImport(run([...mapping, "unknown", true]).context, `${fixtures}savings-account.csv`, { account: "savings" });
+    const afterImport = await show();
+    expect(afterImport).toContain("Review: CHANGED SINCE REVIEW (closed 2026-10-28T10:00:00.000Z; added tx_010)");
+    expect(afterImport).toContain("What stood out? Card payment was large");
+    expect(afterImport).toContain("What will you change next week? Check the card statement");
+
+    const books = closed.categories.find((category) => category.name === "Books")?.id as string;
+    await runEdit(run(["classify", "spending", "culture", books, "unreviewed", "done"]).context, "tx_002");
+    expect(await show()).toContain("Review: CHANGED SINCE REVIEW (closed 2026-10-28T10:00:00.000Z; added tx_010; changed tx_002)");
+
+    const reopened = run(["close", true, "exit"]);
+    await runReview(reopened.context, { week: WEEK });
+    expect(reopened.out.join("\n")).toContain("CHANGED SINCE REVIEW");
+    const reclosed = await loadStore(paths);
+    expect(reclosed.reviews[0]?.closures).toHaveLength(2);
+    expect(reclosed.reviews[0]?.reflection).toEqual({ stood_out: "Card payment was large", next_change: "Check the card statement" });
+    expect(await show()).toContain("Review: closed 2026-10-28T10:00:00.000Z");
+  });
+
+  it("exits without closing the review", async () => {
+    await runReview(run(["exit"]).context, { week: WEEK });
+    expect((await loadStore(paths)).reviews).toEqual([]);
+    expect(await show()).toContain("Review: not closed");
   });
 });

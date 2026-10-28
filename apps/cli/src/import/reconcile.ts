@@ -1,6 +1,7 @@
 import {
   createImportedEntry,
   nextId,
+  reviseEntry,
   type Account,
   type CsvMapping,
   type Entry,
@@ -345,20 +346,12 @@ export function applyImport(store: Store, input: ImportInput, plan: ImportPlan, 
       if (rowPlan.reason === "changed_value") {
         const retained = next.entries.find((entry) => entry.id === rowPlan.entry_id) as Entry;
         // Applying changed values is explicit; a changed amount changes financial meaning and needs fresh review.
-        const updated: Entry = {
-          ...retained,
-          source: row.values,
-          review_state: retained.source.amount === row.values.amount ? retained.review_state : "unreviewed",
-        };
-        next = addHistory(replaceEntry(next, updated), {
-          at: meta.now,
-          kind: "entry_source_replaced",
-          subject_type: "entry",
-          subject_id: retained.id,
-          before: { source: retained.source, review_state: retained.review_state },
-          after: { source: updated.source, review_state: updated.review_state },
-          note: `Import ${importId.id}, row ${row.row}`,
-        });
+        next = reviseEntry(
+          next,
+          retained.id,
+          (current) => ({ ...current, source: row.values, review_state: current.source.amount === row.values.amount ? current.review_state : "unreviewed" }),
+          { kind: "entry_source_replaced", now: meta.now, note: `Import ${importId.id}, row ${row.row}` },
+        ).store;
         match = { ...match, previous_values: retained.source };
       }
     }
@@ -413,20 +406,13 @@ export function reverseSourceReuse(store: Store, sourceRecordId: string, now: Ti
       throw new CliError(`Entry ${retained.id} has changed since source row ${sourceRecordId} replaced its values; reverse the later change first.`);
     }
     // Restoring a different amount changes financial meaning, so the entry needs fresh review.
-    const restored: Entry = {
-      ...retained,
-      source: source.match.previous_values,
-      review_state: source.match.previous_values.amount === retained.source.amount ? retained.review_state : "unreviewed",
-    };
-    next = addHistory(replaceEntry(next, restored), {
-      at: now,
-      kind: "entry_source_restored",
-      subject_type: "entry",
-      subject_id: retained.id,
-      before: { source: retained.source, review_state: retained.review_state },
-      after: { source: restored.source, review_state: restored.review_state },
-      note: `Reversal of source row ${source.id}`,
-    });
+    const previous = source.match.previous_values;
+    next = reviseEntry(
+      next,
+      retained.id,
+      (current) => ({ ...current, source: previous, review_state: previous.amount === current.source.amount ? current.review_state : "unreviewed" }),
+      { kind: "entry_source_restored", now, note: `Reversal of source row ${source.id}` },
+    ).store;
   }
   const created = createImportedEntry(next, source.account_id, source.values, now);
   next = created.store;

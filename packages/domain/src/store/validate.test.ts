@@ -238,3 +238,48 @@ describe("validateStore (imports)", () => {
     ).toEqual(["imports[0].coverage"]);
   });
 });
+
+describe("validateStore (reviews and corrections)", () => {
+  function secondEntry(store: Store): Store {
+    return createImportedEntry(store, "acct_001", { ...store.entries[0]!.source, description: "Corner Cafe again" }, NOW).store;
+  }
+
+  it("accepts entries saved before revisions were recorded", () => {
+    const store = importedStore();
+    const { revision: _revision, ...legacy } = store.entries[0]!;
+    expect(validateStore(JSON.parse(JSON.stringify({ ...store, entries: [legacy] }))).ok).toBe(true);
+    expect(errorsOf({ ...store, entries: [{ ...store.entries[0], revision: 0 }] })).toEqual(["entries[0].revision"]);
+  });
+
+  it("rejects classifications that do not fit, exclusion chains and unlinked goal contributions", () => {
+    const store = secondEntry(importedStore());
+    const [first, second] = store.entries as [Store["entries"][number], Store["entries"][number]];
+    const groceries = store.categories.find((category) => category.name === "Groceries")!.id;
+    expect(errorsOf({ ...store, entries: [{ ...first, treatment: "wants", category_id: groceries }, second] })).toEqual(["entries[0]"]);
+    expect(errorsOf({ ...store, entries: [{ ...first, movement: "inflow", purpose: "refund" }, second] })).toEqual(["entries[0]"]);
+    expect(
+      errorsOf({
+        ...store,
+        entries: [
+          { ...first, duplicate: { status: "excluded", of_entry_id: second.id } },
+          { ...second, duplicate: { status: "excluded", of_entry_id: first.id } },
+        ],
+      }),
+    ).toEqual(["entries", "entries"]);
+    const savings = store.categories.find((category) => category.treatment === "goal")!.id;
+    expect(errorsOf({ ...store, entries: [{ ...first, movement: "transfer", purpose: "goal_contribution", treatment: "goal", category_id: savings }, second] })).toEqual([
+      "goal_contribution_links",
+    ]);
+  });
+
+  it("rejects reviews that do not start on a Monday or name unknown entries", () => {
+    const store = importedStore();
+    const review = { id: "rev_001", week_start: "2026-10-05", closures: [{ closed_at: NOW, entries: [{ entry_id: "tx_001", revision: 1 }] }], created_at: NOW };
+    expect(validateStore(JSON.parse(JSON.stringify({ ...store, reviews: [review] }))).ok).toBe(true);
+    expect(errorsOf({ ...store, reviews: [{ ...review, week_start: "2026-10-06" }] })).toEqual(["reviews[0].week_start"]);
+    expect(errorsOf({ ...store, reviews: [{ ...review, closures: [{ closed_at: NOW, entries: [{ entry_id: "tx_404", revision: 1 }] }] }] })).toEqual([
+      "reviews[0].closures[0].entries[0]",
+    ]);
+    expect(errorsOf({ ...store, reviews: [review, { ...review, id: "rev_002" }] })).toEqual(["reviews[1].week_start"]);
+  });
+});

@@ -1,12 +1,16 @@
+import { classificationProblems } from "../classification/rules.ts";
 import { MOVEMENTS, PURPOSES, REVIEW_STATES, isTreatment } from "../classification/vocabulary.ts";
 import { MoneyRangeError } from "../errors.ts";
 import { isPence, type Pence } from "../money/pence.ts";
 import { describePlanError, validatePlan } from "../plan/plan.ts";
-import { parseIsoDate, parseMonth } from "../periods/periods.ts";
+import { parseIsoDate, parseMonth, parseWeekStart } from "../periods/periods.ts";
 import { err, ok, type Result } from "../result.ts";
+import { duplicateProblems } from "../review/duplicates.ts";
+import { goalLinkProblems } from "../review/goal-links.ts";
 import {
   CSV_DELIMITERS,
   DATE_FORMATS,
+  DUPLICATE_STATUSES,
   ID_PREFIXES,
   MATCH_BASES,
   NORMALISATION_VERSION,
@@ -178,6 +182,7 @@ export function validateStore(value: unknown): Result<Store, readonly StoreValid
   }
 
   if (Array.isArray(value["categories"])) {
+    const names = new Set<string>();
     value["categories"].forEach((category: unknown, index) => {
       const path = `categories[${index}]`;
       if (!isObject(category)) {
@@ -186,7 +191,13 @@ export function validateStore(value: unknown): Result<Store, readonly StoreValid
       }
       if (typeof category["id"] !== "string") fail(`${path}.id`, "expected a string");
       if (!isTreatment(category["treatment"])) fail(`${path}.treatment`, "unknown treatment");
-      if (typeof category["name"] !== "string" || category["name"] === "") fail(`${path}.name`, "expected a name");
+      if (typeof category["name"] !== "string" || category["name"] === "") {
+        fail(`${path}.name`, "expected a name");
+      } else {
+        const key = `${String(category["treatment"])}#${category["name"].toLowerCase()}`;
+        if (names.has(key)) fail(`${path}.name`, `duplicate category ${category["name"]} in its treatment`);
+        names.add(key);
+      }
       if (typeof category["created_at"] !== "string") fail(`${path}.created_at`, "expected a timestamp string");
     });
   }
@@ -287,6 +298,7 @@ export function validateStore(value: unknown): Result<Store, readonly StoreValid
   }
 
   validateImportCollections(value, fail);
+  validateReviewCollections(value, fail);
 
   if (Array.isArray(value["history"])) {
     value["history"].forEach((record: unknown, index) => {
@@ -307,7 +319,71 @@ export function validateStore(value: unknown): Result<Store, readonly StoreValid
   if (errors.length > 0) {
     return err(errors);
   }
-  return ok(value as unknown as Store);
+  // Once the shape is sound, check the financial rules that span records.
+  const store = value as unknown as Store;
+  store.entries.forEach((entry, index) => {
+    for (const problem of classificationProblems(store, entry, entry.source.source_movement)) fail(`entries[${index}]`, problem);
+  });
+  for (const problem of duplicateProblems(store.entries)) fail("entries", problem);
+  for (const problem of goalLinkProblems(store)) fail("goal_contribution_links", problem);
+  if (errors.length > 0) {
+    return err(errors);
+  }
+  return ok(store);
+}
+
+function isPositiveInteger(value: unknown): boolean {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
+}
+
+/** Savings-goal contribution links and weekly reviews (CLI MVP T3). */
+function validateReviewCollections(value: Json, fail: Fail): void {
+  const entryIds = new Set(Array.isArray(value["entries"]) ? value["entries"].map((entry: unknown) => (isObject(entry) ? entry["id"] : undefined)) : []);
+  eachRecord(value["goal_contribution_links"], "goal_contribution_links", fail, (link, path) => {
+    if (!isNonEmptyString(link["goal_id"])) fail(`${path}.goal_id`, "expected a string");
+    const ids = link["entry_ids"];
+    if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string" && entryIds.has(id))) fail(`${path}.entry_ids`, "references an unknown entry");
+    if (typeof link["linked_at"] !== "string") fail(`${path}.linked_at`, "expected a timestamp string");
+  });
+
+  const weeks = new Set<string>();
+  eachRecord(value["reviews"], "reviews", fail, (review, path) => {
+    const week = review["week_start"];
+    if (typeof week !== "string" || !parseWeekStart(week).ok) {
+      fail(`${path}.week_start`, "expected a Monday in YYYY-MM-DD form");
+    } else if (weeks.has(week)) {
+      fail(`${path}.week_start`, `duplicate review for ${week}`);
+    } else {
+      weeks.add(week);
+    }
+    const reflection = review["reflection"];
+    if (reflection !== undefined) {
+      if (!isObject(reflection)) fail(`${path}.reflection`, "expected an object");
+      else {
+        for (const field of ["stood_out", "next_change"] as const) {
+          if (reflection[field] !== undefined && !isNonEmptyString(reflection[field])) fail(`${path}.reflection.${field}`, "expected a non-empty string when present");
+        }
+      }
+    }
+    const closures = review["closures"];
+    if (!Array.isArray(closures)) {
+      fail(`${path}.closures`, "expected an array");
+    } else {
+      closures.forEach((closure: unknown, index) => {
+        const cpath = `${path}.closures[${index}]`;
+        if (!isObject(closure) || typeof closure["closed_at"] !== "string" || !Array.isArray(closure["entries"])) {
+          fail(cpath, "expected closed_at and entries");
+          return;
+        }
+        closure["entries"].forEach((closed: unknown, entryIndex) => {
+          if (!isObject(closed) || !entryIds.has(closed["entry_id"]) || !isPositiveInteger(closed["revision"])) {
+            fail(`${cpath}.entries[${entryIndex}]`, "expected a known entry and its revision");
+          }
+        });
+      });
+    }
+    if (typeof review["created_at"] !== "string") fail(`${path}.created_at`, "expected a timestamp string");
+  });
 }
 
 /** Accounts, mappings, imports, source records and entries (CLI MVP T2), with their references. */
@@ -381,6 +457,7 @@ function validateImportCollections(value: Json, fail: Fail): void {
     if (!isTreatment(entry["treatment"])) fail(`${path}.treatment`, "unknown treatment");
     if (!categoryIds.has(entry["category_id"])) fail(`${path}.category_id`, "references an unknown category");
     if (!isOneOf(REVIEW_STATES, entry["review_state"])) fail(`${path}.review_state`, "unknown review state");
+    if (entry["revision"] !== undefined && !isPositiveInteger(entry["revision"])) fail(`${path}.revision`, "expected a positive integer");
     if (typeof entry["created_at"] !== "string") fail(`${path}.created_at`, "expected a timestamp string");
   });
   // Duplicate references need every entry ID, so check them in a second pass.
@@ -389,8 +466,8 @@ function validateImportCollections(value: Json, fail: Fail): void {
       if (!isObject(entry) || entry["duplicate"] === undefined) return;
       const duplicate = entry["duplicate"];
       const path = `entries[${index}].duplicate`;
-      if (!isObject(duplicate) || duplicate["status"] !== "candidate") {
-        fail(path, "expected a candidate status");
+      if (!isObject(duplicate) || !isOneOf(DUPLICATE_STATUSES, duplicate["status"])) {
+        fail(path, "expected candidate, kept or excluded");
       } else if (typeof duplicate["of_entry_id"] !== "string" || !entryIds.has(duplicate["of_entry_id"]) || duplicate["of_entry_id"] === entry["id"]) {
         fail(`${path}.of_entry_id`, "references an unknown or the same entry");
       }
