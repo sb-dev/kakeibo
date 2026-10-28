@@ -1,0 +1,22 @@
+{
+  "name": "@kakeibo/domain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kakeibo financial domain: money, periods, plans and store schema",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "engines": {
+    "node": ">=22.12.0 <23"
+  }
+}
