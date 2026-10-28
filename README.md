@@ -51,7 +51,17 @@ See [Architecture §3](docs/specs/05-system-architecture-and-data-spec.md#3-adop
 
 ## Getting started
 
-Start with the [product specification](docs/specs/01-product-and-ux-spec.md), [specification index](docs/specs/README.md) and [roadmap](docs/product/roadmap.md). There is currently no package manifest or application/test command to run. Verified setup and test commands belong here when the first executable slice is accepted.
+Start with the [product specification](docs/specs/01-product-and-ux-spec.md), [specification index](docs/specs/README.md) and [roadmap](docs/product/roadmap.md). The first executable slice is the CLI MVP (`apps/cli` and `packages/domain`). It needs Node.js 22 LTS and pnpm 10.
+
+```sh
+pnpm install
+pnpm typecheck
+pnpm test
+pnpm build
+node apps/cli/bin/kakeibo.js --help
+```
+
+`kakeibo init` creates a local store and `kakeibo plan --month 2026-10` plans a month. Import, review and reporting commands follow the [CLI MVP tasks](docs/product/cli-mvp-tasks.md). See [`apps/cli/README.md`](apps/cli/README.md) for usage, data files and backup recovery.
 
 [Deployment documentation](docs/deployment/README.md) will describe the supported managed-provider architecture. Core tests must use safe fixtures and must not require production banking, advertising, app-store or LLM credentials.
 
@@ -59,7 +69,7 @@ Start with the [product specification](docs/specs/01-product-and-ux-spec.md), [s
 
 | Area | Responsibility |
 |---|---|
-| `apps/` | Mobile, public web and API applications |
+| `apps/` | CLI (`apps/cli`), and future mobile, public web and API applications |
 | `packages/` | Financial domain, application services and shared contracts |
 | `infra/` | Declarative infrastructure and environment configuration |
 | [Docs](docs/README.md) | Product and technical reference, specifications and roadmap |
