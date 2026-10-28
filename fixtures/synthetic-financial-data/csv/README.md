@@ -36,4 +36,8 @@ Date,Description,Amount
 | `overlap-changed.csv` | `overlap-a.csv` with a changed amount (2 October) and a changed description (7 October). |
 | `changed-mapping.csv` | The rows of `overlap-a.csv` with renamed, reordered columns, semicolons and `DD/MM/YYYY` dates: an incompatible mapping. |
 | `review-week.csv` | A current account for the week of 19 October (the PRD £50 groceries, £20 books, £10 refund and £200 savings transfer, a card payment and two identical cafe purchases) and the cross-month week of 26 October. |
+| `review-week-reexport.csv` | A later complete export of the same account, 19 October to 8 November: the rows of `review-week.csv` in a different order plus one new row on 3 November. Imported after `review-week.csv`, it reuses nine entries and adds one. |
+| `cafe-search-partial.csv` | A filtered search export with only the two identical Corner Cafe purchases of 24 October. Declared partial, it needs an explicit reuse or keep-separate decision; kept separate, the rows become duplicate candidates for the weekly review. |
 | `savings-account.csv` | The savings-account side of the £200 transfer in `review-week.csv`, for linking both sides to the Savings goal once. |
+
+The [CLI walkthrough](../../../docs/product/cli-mvp-walkthrough.md) uses `review-week.csv`, `review-week-reexport.csv`, `cafe-search-partial.csv` and `savings-account.csv` in that order.

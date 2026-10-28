@@ -51,7 +51,7 @@ See [Architecture §3](docs/specs/05-system-architecture-and-data-spec.md#3-adop
 
 ## Getting started
 
-Start with the [product specification](docs/specs/01-product-and-ux-spec.md), [specification index](docs/specs/README.md) and [roadmap](docs/product/roadmap.md). The first executable slice is the CLI MVP (`apps/cli` and `packages/domain`). It needs Node.js 22 LTS and pnpm 10.
+Start with the [product specification](docs/specs/01-product-and-ux-spec.md), [specification index](docs/specs/README.md) and [roadmap](docs/product/roadmap.md). The first executable slice is the CLI MVP (`apps/cli` and `packages/domain`). It needs Node.js 22 LTS (`>=22.12.0 <23`) and pnpm 10.
 
 ```sh
 pnpm install
@@ -61,7 +61,11 @@ pnpm build
 node apps/cli/bin/kakeibo.js --help
 ```
 
-`kakeibo init` creates a local store, `kakeibo plan --month 2026-10` plans a month, `kakeibo import statement.csv --account current` imports posted CSV transactions, `kakeibo review --week 2026-10-19` reviews a week and `kakeibo edit tx_014` corrects one entry. Reporting commands follow the [CLI MVP tasks](docs/product/cli-mvp-tasks.md). See [`apps/cli/README.md`](apps/cli/README.md) for usage, data files and backup recovery.
+To call it as `kakeibo`, run `pnpm link --global` inside `apps/cli` after building.
+
+`kakeibo init` creates a local store, `kakeibo plan --month 2026-10` plans a month, `kakeibo import statement.csv --account current` imports posted CSV transactions, `kakeibo review --week 2026-10-19` reviews a week, `kakeibo edit tx_014` corrects one entry, and `kakeibo summary --month 2026-10` and `kakeibo spending --month 2026-10 --envelope Needs --category Groceries` report on the month. Every command accepts `--help`.
+
+The CLI handles GBP personal accounts only, reads a documented generic CSV format (no named bank's export has been checked), keeps everything in one plain-text JSON file on your device and reports imported activity only, never a bank balance. The [CLI guide](apps/cli/README.md) covers usage, the CSV format and sign mapping, the review workflow, data files and backup recovery. The [walkthrough record](docs/product/cli-mvp-walkthrough.md) shows one complete verified run with its totals, Node.js version and operating system.
 
 [Deployment documentation](docs/deployment/README.md) will describe the supported managed-provider architecture. Core tests must use safe fixtures and must not require production banking, advertising, app-store or LLM credentials.
 
