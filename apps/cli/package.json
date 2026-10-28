@@ -1,0 +1,24 @@
+{
+  "name": "@kakeibo/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kakeibo command-line interface",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "kakeibo": "./bin/kakeibo.js"
+  },
+  "files": ["bin", "dist"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "8.7.5",
+    "@kakeibo/domain": "workspace:*",
+    "commander": "15.0.0"
+  },
+  "engines": {
+    "node": ">=22.12.0 <23"
+  }
+}

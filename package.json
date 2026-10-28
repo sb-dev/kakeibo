@@ -1,0 +1,22 @@
+{
+  "name": "kakeibo-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Kakeibo CLI MVP workspace",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --workspace-concurrency=1 run typecheck",
+    "test": "vitest run",
+    "build": "pnpm -r run build"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

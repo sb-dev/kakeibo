@@ -1,5 +1,5 @@
 # Applications
 
-Reserved for future `mobile/`, `web/` and `api/` applications.
+`cli/` contains the Kakeibo CLI MVP; see [`cli/README.md`](cli/README.md).
 
-No application implementation is included in this scaffold.
+`mobile/`, `web/` and `api/` are reserved for future applications and contain no implementation.

@@ -1,6 +1,6 @@
 # Contributing to Kakeibo
 
-Kakeibo is currently in pre-implementation scaffolding.
+Kakeibo is implementing its first executable slice, the CLI MVP in `apps/cli` and `packages/domain`. Other applications and packages remain scaffolding. See [`docs/product/cli-mvp-tasks.md`](docs/product/cli-mvp-tasks.md).
 
 Before changing behaviour, read [`docs/specs/README.md`](docs/specs/README.md). A contribution must not silently redefine behaviour owned by a canonical spec.
 

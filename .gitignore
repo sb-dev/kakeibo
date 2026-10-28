@@ -13,3 +13,12 @@ coverage/
 .idea/
 .vscode/
 *.log
+
+# Local Kakeibo stores, backups, locks and personal import files.
+# Synthetic fixtures under fixtures/synthetic-financial-data/ stay tracked.
+.kakeibo/
+**/store.json
+**/store.json.bak
+**/store.json.tmp*
+**/store.lock
+/imports/

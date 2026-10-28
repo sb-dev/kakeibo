@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@kakeibo/domain": ["../../packages/domain/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}
