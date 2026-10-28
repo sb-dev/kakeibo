@@ -1,7 +1,7 @@
 # Kakeibo — Financial Domain Model Spec
 
-**Version:** 1.1  
-**Date:** 2026-09-01  
+**Version:** 1.2\
+**Date:** 2026-10-28\
 **Status:** Canonical implementation spec
 
 ## 1. Purpose and authority
@@ -39,6 +39,7 @@ The core represents financial activity without forcing every entry into a Kakeib
 ```text
 income
 personal spending
+refunds
 fixed commitments
 transfers
 credit-card repayments
@@ -142,6 +143,7 @@ Classification separates concerns rather than overloading one category field:
 
 ```text
 movement
+purpose
 plan treatment
 category
 optional tags
@@ -171,6 +173,16 @@ Detailed categories are user-extensible from the start. Examples include `Needs 
 Tags such as `coffee`, `children`, `commute` or `home` may support search and insights but never replace financial classification.
 
 At minimum, scope distinguishes `personal` and `business`. Business entries may remain reviewable and exportable while staying outside the personal plan.
+
+---
+
+### 3.3 Refunds
+
+A refund has movement `inflow` and purpose `refund`. It returns a previous spending amount; it is not income. Keep purpose separate from movement, plan treatment, category and review state.
+
+Allocate the refund to the spending's treatment/category through explicit review. A link to the original purchase is useful when available, but is not required. Missing purchases do not prevent refund classification. Unknown treatment/category remains Unclassified/Uncategorised until resolved or explicitly accepted; do not infer purpose from merchant alone.
+
+Use the refund's posted period. A later refund does not rewrite the purchase period or its review. Partial refunds and negative category/envelope net spending are valid. A refund affects reviewed totals only after explicit confirmation.
 
 ---
 
@@ -254,7 +266,7 @@ Kakeibo may separately track reviewed observed income:
 planning income ≠ observed income
 ```
 
-An unexpected bonus, refund or interest payment can therefore be recognised without rewriting the plan.
+An unexpected bonus or interest payment can therefore be recognised as observed income without rewriting the plan. A refund remains an inflow but reduces spending under §3.3; it does not increase observed or planning income.
 
 ### 5.2 Fixed commitments
 
@@ -450,7 +462,30 @@ These are separate concepts:
 | distinct records look like the same real-world movement | create a duplicate candidate for review |
 | user confirms a duplicate | exclude the confirmed duplicate from totals |
 
-Prefer stable source identifiers. Fallback fingerprints must include enough source provenance to avoid collapsing legitimate same-day, same-amount activity.
+Prefer stable source identifiers within the source account. Fallback fingerprints must include enough source provenance to avoid collapsing legitimate same-day, same-amount activity.
+
+### 10.3 Overlapping file exports without stable IDs
+
+Reconcile repeated source observations before proposing financial duplicates. Exact-file identity can use account, file hash and row position. For different files, use counted occurrences within matching groups:
+
+```text
+account + posted date + currency + source movement + amount + description
++ stable source reference when available
+```
+
+Use source-normalised values, not editable financial classifications. Keep normalisation conservative and versioned. Do not reconcile incompatible mappings or reference conventions automatically.
+
+Count-based reconciliation requires compatible exports with known or explicitly declared complete posted-transaction coverage for stated date ranges. Compare only covered dates. Record coverage with each import; never infer it from the first and last rows.
+
+For each matching group, reuse its existing reconciled occurrences one-to-one. An incoming count of three against two existing occurrences reuses two and adds one. Under complete coverage, excess occurrences are new activity; equality alone does not make them duplicate candidates. Row order does not matter. Count occurrences, not the number of import observations attached to them. An occurrence index is a local matching aid, not a stable bank identifier.
+
+If an existing occurrence is missing or a group's count falls, flag the affected posted date. Do not delete entries or silently pair changed values. Require explicit reconciliation of that date before applying any changed-value replacement; preserve the old source evidence and require fresh review if financial meaning changes.
+
+Filtered exports, uncertain coverage and incompatible mappings require explicit decisions on proposed matches. Show source rows, retained entries and counts; allow bulk reuse or keep-separate with per-row overrides. Conflicting stable source IDs remain errors, not fallback matches.
+
+Show reused, new and unresolved rows in the import preview. One import confirmation may accept routine matches without separate decisions per repeated row. It does not mark new entries reviewed. Preserve reused entry IDs, classifications and review states. Attach each new source observation to its retained entry and record the match basis. Allow incorrect reuse to be reversed into a separate unreviewed entry without altering the retained entry.
+
+A similar row outside these conditions remains a duplicate candidate, not an automatically excluded entry.
 
 ---
 
@@ -469,7 +504,18 @@ projected flexible spending
 projected end-of-month remainder
 ```
 
-Each flexible envelope tracks limit, reviewed spend, unreviewed spend, reviewed remaining amount and pace when valid. Each active goal tracks target, progress, optional current-month allocation and reviewed contributions where meaningful.
+For each period, treatment/category and review state:
+
+```text
+net_spending = gross_spending - refunds
+reviewed_remaining = envelope_limit - reviewed_net_spending
+```
+
+Show gross spending, refunds and net spending separately. Refunds do not also enter observed income. Any derived income-minus-spending result uses net spending once; it must not add refunds again. Unclassified refunds remain visible separately until allocated.
+
+A refund may make net spending negative and remaining capacity exceed the original limit. This does not change the plan or establish a bank balance, saved amount or complete account coverage.
+
+Each flexible envelope tracks limit, reviewed net spending, unreviewed net spending, reviewed remaining amount and pace when valid. Each active goal tracks target, progress, optional current-month allocation and reviewed contributions where meaningful.
 
 Aggregation rules:
 
@@ -487,10 +533,11 @@ The first implementation may use:
 
 ```text
 elapsed_ratio = elapsed_days / days_in_month
-pace_projection = reviewed_flexible_spending / elapsed_ratio
+pace_projection = reviewed_gross_flexible_spending / elapsed_ratio
+                  - reviewed_flexible_refunds
 ```
 
-Do not project before enough of the month has elapsed. Exclude transfers, business activity, duplicates and unreviewed entries from reviewed spend; keep unresolved activity visible alongside the projection.
+Use only posted, reviewed refunds; do not extrapolate a one-off refund as recurring income or future refunds. Do not project before enough of the month has elapsed. Exclude transfers, business activity, duplicates and unreviewed entries from reviewed spend; keep unresolved activity visible alongside the projection.
 
 ### 11.2 Projected remainder / savings
 
@@ -569,6 +616,10 @@ confirmed split parts replace the original amount in aggregates
 re-importing the same source entry is idempotent
 a duplicate candidate is not automatically excluded
 confirmed duplicates contribute zero to aggregates
+repeated source observations preserve one canonical entry and its review state
+uncertain overlap matches require explicit reconciliation
+refunds reduce spending in their posted period and never also count as income
+reviewed remaining = envelope limit - reviewed net spending
 
 plan changes do not rewrite historical reviewed entries
 goal changes do not rewrite historical contributions or targets
@@ -600,6 +651,11 @@ The model is correct when:
 - the historical CLI `skip` behaviour cannot be confused with review skip;
 - splits preserve value without counting the source twice;
 - import idempotency and duplicate review remain distinct;
+- reordered complete overlapping exports reuse existing occurrences; two identical purchases remain two, and a third adds exactly one;
+- missing occurrences, changed values and incomplete coverage do not silently delete or merge history;
+- reuse preserves review state and provenance; reversing an incorrect match creates a separate unreviewed entry;
+- a £50 purchase and £10 refund yield £40 net spending and no refund income; with a £150 limit, reviewed remaining is £110;
+- if that refund posts next month, the purchase month stays at £50 and the next month shows £10 refunds and −£10 net spending when it has no purchases;
 - reviewed and unreviewed totals remain distinct;
 - projections and historical comparisons remain deterministic and explainable;
 - plan and goal changes do not rewrite historical financial truth;
@@ -612,4 +668,4 @@ Core test:
 
 ---
 
-*Kakeibo — Financial Domain Model Spec v1.1 · 1 September 2026*
+*Kakeibo — Financial Domain Model Spec v1.2 · 28 October 2026*

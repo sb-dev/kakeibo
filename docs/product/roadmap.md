@@ -4,9 +4,11 @@ This roadmap connects Kakeibo's product requirements to the work that proves Pac
 
 ## Current position
 
-**Now: prepare the checkpoint 1 financial-domain delivery.** The repository contains the seven canonical specifications and project scaffolding. It has no executable financial implementation, package manifest or application CI. No Kakeibo checkpoint acceptance is recorded here.
+**Proposed next delivery: the local CLI MVP.** The repository contains the seven canonical specifications and project scaffolding. It has no executable financial implementation, package manifest or application CI. No Kakeibo checkpoint acceptance is recorded here.
 
-**Next:** checkpoints 2–5 and the product journeys built on their foundations. **Later:** checkpoints 6–9, public-launch acceptance and connected-banking Graduation.
+Review the [CLI MVP PRD](cli-mvp-prd.md) and [implementation tasks](cli-mvp-tasks.md): monthly planning and safe storage → CSV import → weekly review → reporting → release verification. The proposed release retains all four envelopes and a single Savings goal. Financial Model v1.2 defines refunds and overlapping-source reconciliation. Implementation and Pactwright checkpoint acceptance remain pending; the checkpoint programme below remains separate.
+
+**Next:** checkpoint 1 financial-domain acceptance, then checkpoints 2–5 and the product journeys built on their foundations. **Later:** checkpoints 6–9, public-launch acceptance and connected-banking Graduation.
 
 ## Authority and dependencies
 
