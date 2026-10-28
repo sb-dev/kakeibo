@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CommandContext } from "../context.ts";
 import { CliError, NotInteractiveError, StoreMissingError, UsageError } from "../errors.ts";
-import { scriptedPrompter, type ScriptedAnswer } from "../prompts/plan-prompter.ts";
+import { scriptedPrompter, type ScriptedAnswer } from "../prompts/prompter.ts";
 import { storePaths, type StorePaths } from "../storage/paths.ts";
 import { initStore, loadStore, updateStore } from "../storage/store-file.ts";
 import { addPlanRevision, pence, savingsGoal, validatePlan, type Month, type Store } from "@kakeibo/domain";

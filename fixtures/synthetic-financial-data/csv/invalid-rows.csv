@@ -1,0 +1,6 @@
+Date,Description,Amount
+2026-10-01,Salary ACME LTD,1500.00
+2026-02-30,Impossible date,-5.00
+2026-10-03,Over-precise,-1.005
+2026-10-04,,-3.00
+2026-10-05,Not a number,abc

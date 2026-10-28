@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   addPlanRevision,
@@ -12,7 +13,10 @@ import {
   type Month,
   type Store,
 } from "@kakeibo/domain";
-import { CorruptStoreError, LockHeldError, StoreExistsError, StoreMissingError } from "../errors.ts";
+import { runImport } from "../commands/import.ts";
+import type { CommandContext } from "../context.ts";
+import { CliError, CorruptStoreError, LockHeldError, StoreExistsError, StoreMissingError } from "../errors.ts";
+import { scriptedPrompter, type ScriptedAnswer } from "../prompts/prompter.ts";
 import { storePaths, type StorePaths } from "./paths.ts";
 import { initStore, loadStore, updateStore } from "./store-file.ts";
 
@@ -230,5 +234,62 @@ describe("writer contention", () => {
     await updateStore(paths, savePrdPlan);
     await updateStore(paths, (store) => savePrdPlan(store, 60000));
     expect(await listDir()).toEqual(["store.json", "store.json.bak"]);
+  });
+});
+
+describe("imports", () => {
+  const fixtures = fileURLToPath(new URL("../../../../fixtures/synthetic-financial-data/csv/", import.meta.url));
+  const mapping: ScriptedAnswer[] = [null, "Date", "YYYY-MM-DD", "Description", "signed", "Amount", "negative", "", "", ""];
+
+  function importContext(answers: readonly ScriptedAnswer[]): CommandContext {
+    return {
+      paths,
+      out: () => {},
+      err: () => {},
+      now: () => new Date(NOW),
+      interactive: true,
+      prompter: scriptedPrompter(answers),
+    };
+  }
+
+  /** A store with one earlier save, so both store.json and store.json.bak exist. */
+  async function storeWithBackup(): Promise<{ store: Buffer; backup: Buffer; files: string[] }> {
+    await initStore(paths, NOW);
+    await updateStore(paths, savePrdPlan);
+    return { store: await fs.readFile(paths.store), backup: await fs.readFile(paths.backup), files: await listDir() };
+  }
+
+  it("leaves the store and backup byte-identical when the file is invalid", async () => {
+    const before = await storeWithBackup();
+    await expect(runImport(importContext(mapping), `${fixtures}invalid-rows.csv`, { account: "current" })).rejects.toBeInstanceOf(CliError);
+    expect(await fs.readFile(paths.store)).toEqual(before.store);
+    expect(await fs.readFile(paths.backup)).toEqual(before.backup);
+    expect(await listDir()).toEqual(before.files);
+  });
+
+  it("leaves the store and backup byte-identical when the preview is cancelled", async () => {
+    const before = await storeWithBackup();
+    await runImport(importContext([...mapping, "unknown", false]), `${fixtures}overlap-a.csv`, { account: "current" });
+    expect(await fs.readFile(paths.store)).toEqual(before.store);
+    expect(await fs.readFile(paths.backup)).toEqual(before.backup);
+    expect(await listDir()).toEqual(before.files);
+  });
+
+  it("keeps imported entries traceable after the source CSV is deleted", async () => {
+    await initStore(paths, NOW);
+    const copy = path.join(root, "statement.csv");
+    await fs.copyFile(`${fixtures}current-account-signed.csv`, copy);
+    await runImport(importContext([...mapping, "unknown", true]), copy, { account: "current" });
+    await fs.rm(copy);
+
+    const store = await loadStore(paths);
+    const tesco = store.entries.find((entry) => entry.source.description === "Tesco Stores, Leeds");
+    expect(tesco).toMatchObject({ review_state: "unreviewed", source: { posted_date: "2026-10-02", amount: 5000, source_movement: "outflow" } });
+    const source = store.source_records.find((record) => record.entry_id === tesco?.id);
+    expect(source).toMatchObject({ row: 2, line: 3, raw: { Date: "2026-10-02", Description: "Tesco Stores, Leeds", Amount: "-50.00", Balance: "1550.00" } });
+    const record = store.imports.find((candidate) => candidate.id === source?.import_id);
+    expect(record).toMatchObject({ file_name: "statement.csv", row_count: 5 });
+    expect(record?.file_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(store.mappings.find((candidate) => candidate.id === record?.mapping_id)).toMatchObject({ date_format: "YYYY-MM-DD", amount: { money_out_sign: "negative" } });
   });
 });

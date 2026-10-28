@@ -41,21 +41,43 @@ export {
   type Treatment,
 } from "./classification/vocabulary.ts";
 export {
+  CSV_DELIMITERS,
+  DATE_FORMATS,
   ID_PREFIXES,
+  MATCH_BASES,
+  NORMALISATION_VERSION,
+  PROPOSAL_REASONS,
   SCHEMA_VERSION,
   STORE_CURRENCY,
+  type Account,
+  type AmountLayout,
   type Category,
+  type CsvDelimiter,
+  type CsvMapping,
+  type DateFormat,
+  type DuplicateState,
+  type Entry,
   type EnvelopeLimits,
   type Goal,
   type GoalAllocation,
   type HistoryKind,
   type HistoryRecord,
   type IdPrefix,
+  type ImportCoverage,
+  type ImportDiscrepancy,
+  type ImportRecord,
+  type MatchBasis,
   type MonthPlan,
   type PlanRevision,
+  type ProposalReason,
+  type SourceMatch,
+  type SourceMovement,
+  type SourceRecord,
+  type SourceValues,
   type Store,
   type Timestamp,
 } from "./store/schema.ts";
+export { createImportedEntry, uncategorisedCategoryId } from "./entries/entries.ts";
 export { INITIAL_CATEGORIES, SAVINGS_GOAL_NAME, createEmptyStore, savingsGoal } from "./store/create.ts";
 export { nextId } from "./store/ids.ts";
 export { validateStore, type StoreValidationError } from "./store/validate.ts";

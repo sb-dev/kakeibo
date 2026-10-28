@@ -1,8 +1,9 @@
 import { Command } from "commander";
+import { runImport } from "./commands/import.ts";
 import { runInit } from "./commands/init.ts";
 import { runPlan } from "./commands/plan.ts";
 import type { CommandContext } from "./context.ts";
-import { inquirerPlanPrompter } from "./prompts/inquirer-plan-prompter.ts";
+import { inquirerPrompter } from "./prompts/inquirer-prompter.ts";
 import { resolveDataDir, storePaths } from "./storage/paths.ts";
 import { isInteractive } from "./terminal.ts";
 
@@ -17,7 +18,7 @@ export function defaultContextFactory(dataDir: string | undefined): CommandConte
     err: (line) => process.stderr.write(`${line}\n`),
     now: () => new Date(),
     interactive: isInteractive(),
-    prompter: inquirerPlanPrompter(),
+    prompter: inquirerPrompter(),
   };
 }
 
@@ -47,6 +48,16 @@ export function createProgram(createContext: ContextFactory = defaultContextFact
     .option("--show", "display the saved plan without prompts")
     .action(async (options: { month?: string; show?: boolean }) => {
       await runPlan(context(), options);
+    });
+
+  program
+    .command("import")
+    .description("Import posted transactions from a CSV file: map columns when needed, preview the rows, then confirm.")
+    .argument("<file>", "UTF-8 CSV file with a header row")
+    .requiredOption("--account <name>", "named personal account; a new name is created by the confirmed import")
+    .option("--remap", "ask for the column mapping again, for example after the export format changed")
+    .action(async (file: string, options: { account: string; remap?: boolean }) => {
+      await runImport(context(), file, options);
     });
 
   return program;
