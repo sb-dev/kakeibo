@@ -173,7 +173,11 @@ The PRD §7 fixture figures Needs £40, Culture £20 and Needs remaining £110 a
 
 ## 5. Continuous integration
 
-The GitHub Actions job (`.github/workflows/ci.yml`: `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm build`) runs on every pull request. The same four commands passed locally on the tested commit as recorded in §2. The CI result for the pull request that adds this record is noted on that pull request.
+The GitHub Actions job (`.github/workflows/ci.yml`: `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm build`) runs on every pull request. The same four commands passed locally on the tested commit as recorded in §2.
+
+| Pull request | Commit | Job | Result |
+|---|---|---|---|
+| [#7](https://github.com/sb-dev/kakeibo/pull/7), which adds this record and the two fixtures | `c21945c578ca115eacd97d3b168982840370a310` | [Typecheck, test and build](https://github.com/sb-dev/kakeibo/actions/runs/40747097070/job/123023672499) | Passed, 2026-10-28 18:39:08 to 18:39:52 UTC |
 
 ## 6. Acceptance
 
