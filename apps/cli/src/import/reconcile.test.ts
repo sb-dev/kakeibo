@@ -313,6 +313,54 @@ describe("source-ID transitions", () => {
     ]);
   });
 
+  function coffee(row: number, sourceId?: string): NormalisedRow {
+    return {
+      row,
+      line: row + 1,
+      raw: {},
+      values: {
+        posted_date: "2026-10-01" as IsoDate,
+        description: "Coffee",
+        currency: "GBP",
+        source_movement: "outflow",
+        amount: 1000 as NormalisedRow["values"]["amount"],
+        ...(sourceId === undefined ? {} : { source_id: sourceId }),
+      },
+    };
+  }
+
+  it.each([
+    ["ID-less row first", [coffee(1), coffee(2, "Y")]],
+    ["ID row first", [coffee(1, "Y"), coffee(2)]],
+  ])("matches mixed ID and ID-less rows independently of row order (%s)", (_order, rows) => {
+    const day = complete("2026-10-01", "2026-10-01");
+    const first: Loaded = { name: "first.csv", sha256: "1".repeat(64), rows: [coffee(1, "X"), coffee(2)] };
+    const { store } = apply(createEmptyStore(NOW), first, day, IDS);
+    const second: Loaded = { name: "second.csv", sha256: "2".repeat(64), rows };
+    const blankRow = rows.find((row) => row.values.source_id === undefined) as NormalisedRow;
+    const planned = plan(store, second, day, IDS);
+    const byId = (id: string | undefined) => planned.rows.find((row) => row.row.values.source_id === id);
+    expect(byId("Y")).toMatchObject({ kind: "reuse", basis: "occurrence_count", entry_id: "tx_002" });
+    expect(byId(undefined)).toMatchObject({ kind: "proposed", entry_id: "tx_001", reason: "source_id_missing" });
+
+    const result = apply(store, second, day, IDS, new Map<number, Decision>([[blankRow.row, "reuse"]]));
+    expect(result.store.entries).toHaveLength(2);
+    expect(result.plan.discrepancies).toEqual([]);
+    const links = result.store.source_records.filter((source) => source.import_id === "imp_002").map((source) => [source.values.source_id ?? null, source.entry_id]);
+    expect(links.sort()).toEqual([[null, "tx_001"], ["Y", "tx_002"]].sort());
+  });
+
+  it.each([
+    ["ID-less row first", [{ ...coffee(1), values: { ...coffee(1).values, amount: 1100 } }, { ...coffee(2, "Y"), values: { ...coffee(2, "Y").values, amount: 1200 } }]],
+    ["ID row first", [{ ...coffee(1, "Y"), values: { ...coffee(1, "Y").values, amount: 1200 } }, { ...coffee(2), values: { ...coffee(2).values, amount: 1100 } }]],
+  ])("pairs changed values for ID rows before ID-less rows (%s)", (_order, rows) => {
+    const day = complete("2026-10-01", "2026-10-01");
+    const { store } = apply(createEmptyStore(NOW), { name: "first.csv", sha256: "1".repeat(64), rows: [coffee(1)] }, day, IDS);
+    const planned = plan(store, { name: "second.csv", sha256: "2".repeat(64), rows: rows as NormalisedRow[] }, day, IDS);
+    expect(planned.rows.find((row) => row.row.values.source_id === "Y")).toMatchObject({ kind: "proposed", entry_id: "tx_001", reason: "changed_value" });
+    expect(planned.rows.find((row) => row.row.values.source_id === undefined)).toMatchObject({ kind: "new" });
+  });
+
   it("never count-matches a row with one source ID to an entry already linked to another", async () => {
     let store = await storeWithA();
     const a = await load("overlap-a.csv");

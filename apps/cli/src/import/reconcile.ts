@@ -156,7 +156,8 @@ export function planImport(store: Store, input: ImportInput, decisions: Decision
   const eligible = (row: NormalisedRow, entry: Entry): boolean => row.values.source_id === undefined || !hasKnownId(entry);
 
   // 2. Counted occurrences within matching groups, independent of row order. Entries without known
-  //    IDs are paired first; an ID-less row matched to an entry with a known ID is only a proposal.
+  //    IDs are paired first, and rows with IDs are allocated before ID-less rows; an ID-less row
+  //    matched to an entry with a known ID is only a proposal.
   const pool = new Map<string, Entry[]>();
   for (const entry of [...entries.filter((entry) => !hasKnownId(entry)), ...entries.filter(hasKnownId)]) {
     if (linked.has(entry.id)) continue;
@@ -174,7 +175,10 @@ export function planImport(store: Store, input: ImportInput, decisions: Decision
   for (const [key, rows] of pending) {
     const existing = pool.get(key) ?? [];
     const used = new Set<string>();
-    for (const row of rows) {
+    // Rows with a source ID can use fewer entries, so they are allocated first; otherwise an ID-less
+    // row could take the only entry a later ID row may use, and the result would depend on row order.
+    const constrainedFirst = [...rows.filter((row) => row.values.source_id !== undefined), ...rows.filter((row) => row.values.source_id === undefined)];
+    for (const row of constrainedFirst) {
       const candidates = existing.filter((entry) => eligible(row, entry));
       const entry = candidates.find((candidate) => !used.has(candidate.id));
       const coverage = autoReason(row.values.posted_date);
@@ -202,7 +206,8 @@ export function planImport(store: Store, input: ImportInput, decisions: Decision
   // 3. Changed values: on a completely covered date, pair an unmatched row with an unmatched
   //    existing entry of the same movement and the same amount or description.
   const paired = new Set<string>();
-  for (const row of unmatched.sort((a, b) => a.row - b.row)) {
+  const idLess = (row: NormalisedRow): number => (row.values.source_id === undefined ? 1 : 0);
+  for (const row of unmatched.sort((a, b) => idLess(a) - idLess(b) || a.row - b.row)) {
     const date = row.values.posted_date;
     const candidate = covers(input.coverage, date)
       ? entries.find(
