@@ -1,6 +1,6 @@
 # Synthetic CSV exports
 
-Synthetic files for the `kakeibo import` tests and documentation. No row comes from a real bank export, and no named bank format is claimed.
+Synthetic files for the `kakeibo import` and `kakeibo review` tests and documentation. No row comes from a real bank export, and no named bank format is claimed.
 
 ## Generic CSV format
 
@@ -35,3 +35,5 @@ Date,Description,Amount
 | `overlap-reduced.csv` | `overlap-a.csv` with one `Corner Cafe` purchase and the 7 October row removed. |
 | `overlap-changed.csv` | `overlap-a.csv` with a changed amount (2 October) and a changed description (7 October). |
 | `changed-mapping.csv` | The rows of `overlap-a.csv` with renamed, reordered columns, semicolons and `DD/MM/YYYY` dates: an incompatible mapping. |
+| `review-week.csv` | A current account for the week of 19 October (the PRD £50 groceries, £20 books, £10 refund and £200 savings transfer, a card payment and two identical cafe purchases) and the cross-month week of 26 October. |
+| `savings-account.csv` | The savings-account side of the £200 transfer in `review-week.csv`, for linking both sides to the Savings goal once. |

@@ -15,11 +15,12 @@ export type Classification = {
  * A Savings-goal contribution is a transfer the user links explicitly (§6.3).
  */
 export const ENTRY_TYPES = [
-  { id: "spending", label: "Spending", movement: "outflow", purpose: "spending", directions: ["outflow"] },
-  { id: "refund", label: "Refund (reduces spending; not income)", movement: "inflow", purpose: "refund", directions: ["inflow"] },
-  { id: "income", label: "Income", movement: "inflow", purpose: "income", directions: ["inflow"] },
+  { id: "spending", name: "Spending", label: "Spending", movement: "outflow", purpose: "spending", directions: ["outflow"] },
+  { id: "refund", name: "Refund", label: "Refund (reduces spending; not income)", movement: "inflow", purpose: "refund", directions: ["inflow"] },
+  { id: "income", name: "Income", label: "Income", movement: "inflow", purpose: "income", directions: ["inflow"] },
   {
     id: "transfer",
+    name: "Transfer",
     label: "Transfer between own accounts or card settlement (not spending)",
     movement: "transfer",
     purpose: "transfer",
@@ -27,14 +28,18 @@ export const ENTRY_TYPES = [
   },
   {
     id: "goal_contribution",
+    name: "Goal contribution",
     label: "Contribution to the Savings goal (a transfer)",
     movement: "transfer",
     purpose: "goal_contribution",
     directions: ["inflow", "outflow"],
   },
-  { id: "adjustment", label: "Adjustment", movement: "adjustment", purpose: "adjustment", directions: ["inflow", "outflow"] },
+  { id: "adjustment", name: "Adjustment", label: "Adjustment", movement: "adjustment", purpose: "adjustment", directions: ["inflow", "outflow"] },
 ] as const satisfies readonly {
   readonly id: string;
+  /** Short name for tables. */
+  readonly name: string;
+  /** Explanatory label for prompts. */
   readonly label: string;
   readonly movement: Movement;
   readonly purpose: Purpose;
