@@ -84,13 +84,14 @@ One confirmation saves the account, the mapping, the import record and its entri
 | Case | Behaviour |
 |---|---|
 | The same file again | Recognised by account, file hash and row values. Nothing is imported. |
-| A row with a known source ID | Reuses its entry. A different date, description or amount for that ID stops the import. |
+| A row with a known source ID | Reuses its entry. A different date, description or amount for that ID stops the import. A row with a new ID is never matched to an entry already linked to a different ID. |
+| A row without an ID that matches an entry with a known source ID | Always proposed for an explicit decision, never reused or added silently. |
 | Complete exports with compatible mappings overlapping on a date | Rows are counted within matching groups (posted date, currency, movement, amount, description and reference), whatever their order. Two existing identical purchases and three incoming ones reuse two and add one. |
 | Fewer occurrences or a missing row on a completely covered date | The date is flagged; the existing entries stay. |
-| A changed amount or description on a completely covered date | Proposed as a match for an explicit decision. Reusing applies the new values; a changed amount makes the entry unreviewed. |
+| A changed amount or description on a completely covered date | Proposed as a match for an explicit decision; the preview shows the retained and incoming values. Reusing applies the new values; a changed amount makes the entry unreviewed. |
 | A filtered or partial file, unknown earlier coverage, or a changed mapping | Matches are proposed, not applied. Choose **reuse** or **keep separate** for all of them, then select rows to override. Kept rows that look identical to an existing entry are marked as possible duplicates for review. |
 
-A mapping change is compatible when only the header changed. A different date format, amount layout or sign convention, description column, reference column or use of source IDs makes earlier coverage incompatible. An incorrect reuse can be reversed into a separate unreviewed entry; the command for this arrives with `kakeibo edit` in T3.
+A mapping change is compatible when only the header changed. A different date format, amount layout or sign convention, description column, reference column or use of source IDs makes earlier coverage incompatible. An incorrect reuse can be reversed into a separate unreviewed entry; reversing a changed-amount replacement restores the earlier amount and makes the entry unreviewed. The command for this arrives with `kakeibo edit` in T3.
 
 ## Data directory
 

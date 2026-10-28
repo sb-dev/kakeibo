@@ -296,6 +296,38 @@ describe("source IDs", () => {
   });
 });
 
+describe("source-ID transitions", () => {
+  const { source_id_column: _ids, ...NO_IDS } = IDS;
+
+  function withIds(loaded: Loaded, ids: readonly string[]): Loaded {
+    return { ...loaded, sha256: `${loaded.sha256.slice(0, 60)}beef`, rows: loaded.rows.map((row, index) => ({ ...row, values: { ...row.values, source_id: ids[index] as string } })) };
+  }
+
+  it("proposes, rather than adds, ID-less rows that match entries with known source IDs", async () => {
+    const { store } = apply(createEmptyStore(NOW), await load("with-ids.csv", IDS), complete("2026-10-01", "2026-10-02"), IDS);
+    const withoutIds = await load("with-ids.csv", NO_IDS);
+    expect(kinds(plan(store, withoutIds, complete("2026-10-01", "2026-10-02"), NO_IDS))).toEqual([
+      "proposed:tx_001:source_id_missing",
+      "proposed:tx_002:source_id_missing",
+      "proposed:tx_003:source_id_missing",
+    ]);
+  });
+
+  it("never count-matches a row with one source ID to an entry already linked to another", async () => {
+    let store = await storeWithA();
+    const a = await load("overlap-a.csv");
+    const ids = withIds(a, ["X1", "X2", "X3", "X4", "X5", "X6"]);
+    const linking = plan(store, ids, OCTOBER_1_10, IDS);
+    expect(linking.rows.every((row) => row.kind === "proposed" && row.reason === "incompatible_mapping")).toBe(true);
+    store = apply(store, ids, OCTOBER_1_10, IDS, new Map(linking.rows.map((row) => [row.row.row, "reuse" as Decision]))).store;
+
+    const distinct: Loaded = { ...withIds(a, ["Y"]), rows: [{ ...(a.rows[2] as NormalisedRow), row: 1, values: { ...(a.rows[2] as NormalisedRow).values, source_id: "Y" } }] };
+    const result = apply(store, distinct, complete("2026-10-05", "2026-10-05"), IDS);
+    expect(kinds(result.plan)).toEqual(["new"]);
+    expect(result.plan.discrepancies).toEqual([{ posted_date: "2026-10-05", missing_entry_ids: ["tx_003", "tx_004"], replaced_entry_ids: [] }]);
+  });
+});
+
 describe("reversing incorrect reuse", () => {
   it("moves the source row to a new unreviewed entry and preserves the retained entry", async () => {
     let store = withEntry(await storeWithA(), "tx_004", { treatment: "wants", review_state: "reviewed" });
@@ -323,5 +355,20 @@ describe("reversing incorrect reuse", () => {
     const reversed = reverseSourceReuse(replaced, source?.id as string, NOW);
     expect(entry(reversed.store, "tx_002").source).toEqual(entry(store, "tx_002").source);
     expect(reversed.entry.source.amount).toBe(5500);
+  });
+
+  it("makes a reviewed entry unreviewed when reversal restores a different amount, and records it", async () => {
+    const store = await storeWithA();
+    const { store: replaced } = apply(store, await load("overlap-changed.csv"), OCTOBER_1_10, SIGNED, new Map<number, Decision>([[2, "reuse"], [5, "keep_separate"]]));
+    const reviewed = withEntry(replaced, "tx_002", { review_state: "reviewed" });
+    const source = reviewed.source_records.find((candidate) => candidate.import_id === "imp_002" && candidate.row === 2);
+    const reversed = reverseSourceReuse(reviewed, source?.id as string, NOW);
+    expect(entry(reversed.store, "tx_002")).toMatchObject({ source: { amount: 5000 }, review_state: "unreviewed" });
+    expect(reversed.store.history.map((record) => record.kind).slice(-2)).toEqual(["entry_source_restored", "source_reuse_reversed"]);
+    expect(reversed.store.history.at(-2)).toMatchObject({
+      subject_id: "tx_002",
+      before: { source: { amount: 5500 }, review_state: "reviewed" },
+      after: { source: { amount: 5000 }, review_state: "unreviewed" },
+    });
   });
 });

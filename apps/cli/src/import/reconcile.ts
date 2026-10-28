@@ -144,10 +144,22 @@ export function planImport(store: Store, input: ImportInput, decisions: Decision
     return previous === "incompatible" ? "incompatible_mapping" : "uncertain_coverage";
   };
 
-  // 2. Counted occurrences within matching groups, independent of row order.
+  // An entry's identity includes every source ID linked to it, not only the one it was created from.
+  const knownIds = new Map<string, Set<string>>();
+  const addKnownId = (entryId: string, id: string | undefined): void => {
+    if (id !== undefined) knownIds.set(entryId, (knownIds.get(entryId) ?? new Set()).add(id));
+  };
+  for (const entry of entries) addKnownId(entry.id, entry.source.source_id);
+  for (const source of sources) addKnownId(source.entry_id, source.values.source_id);
+  const hasKnownId = (entry: Entry): boolean => knownIds.has(entry.id);
+  // A row with a new source ID can never be the same transaction as an entry with a different known ID.
+  const eligible = (row: NormalisedRow, entry: Entry): boolean => row.values.source_id === undefined || !hasKnownId(entry);
+
+  // 2. Counted occurrences within matching groups, independent of row order. Entries without known
+  //    IDs are paired first; an ID-less row matched to an entry with a known ID is only a proposal.
   const pool = new Map<string, Entry[]>();
-  for (const entry of entries) {
-    if (entry.source.source_id !== undefined || linked.has(entry.id)) continue;
+  for (const entry of [...entries.filter((entry) => !hasKnownId(entry)), ...entries.filter(hasKnownId)]) {
+    if (linked.has(entry.id)) continue;
     const key = groupKey(entry.source);
     pool.set(key, [...(pool.get(key) ?? []), entry]);
   }
@@ -161,10 +173,14 @@ export function planImport(store: Store, input: ImportInput, decisions: Decision
   const unmatched: NormalisedRow[] = [];
   for (const [key, rows] of pending) {
     const existing = pool.get(key) ?? [];
-    rows.forEach((row, index) => {
-      const reason = autoReason(row.values.posted_date);
-      const entry = existing[index];
+    const used = new Set<string>();
+    for (const row of rows) {
+      const candidates = existing.filter((entry) => eligible(row, entry));
+      const entry = candidates.find((candidate) => !used.has(candidate.id));
+      const coverage = autoReason(row.values.posted_date);
       if (entry !== undefined) {
+        used.add(entry.id);
+        const reason = row.values.source_id === undefined && hasKnownId(entry) ? "source_id_missing" : coverage;
         if (reason === "auto") {
           plans.set(row.row, { kind: "reuse", row, basis: "occurrence_count", entry_id: entry.id });
           linked.add(entry.id);
@@ -174,13 +190,13 @@ export function planImport(store: Store, input: ImportInput, decisions: Decision
           proposedEntries.add(entry.id);
           if (decision === "reuse") linked.add(entry.id);
         }
-      } else if (existing.length > 0 && reason !== "auto") {
+      } else if (candidates.length > 0 && coverage !== "auto") {
         // Identity is uncertain, so an identical-looking excess row is a duplicate candidate, never excluded.
-        plans.set(row.row, { kind: "new", row, duplicate_of: (existing[0] as Entry).id });
+        plans.set(row.row, { kind: "new", row, duplicate_of: (candidates[0] as Entry).id });
       } else {
         unmatched.push(row);
       }
-    });
+    }
   }
 
   // 3. Changed values: on a completely covered date, pair an unmatched row with an unmatched
@@ -192,7 +208,7 @@ export function planImport(store: Store, input: ImportInput, decisions: Decision
       ? entries.find(
           (entry) =>
             entry.source.posted_date === date &&
-            entry.source.source_id === undefined &&
+            eligible(row, entry) &&
             entry.source.source_movement === row.values.source_movement &&
             (entry.source.amount === row.values.amount || entry.source.description === row.values.description) &&
             !linked.has(entry.id) &&
@@ -391,7 +407,21 @@ export function reverseSourceReuse(store: Store, sourceRecordId: string, now: Ti
     if (differingFields(retained.source, source.values).length > 0) {
       throw new CliError(`Entry ${retained.id} has changed since source row ${sourceRecordId} replaced its values; reverse the later change first.`);
     }
-    next = replaceEntry(next, { ...retained, source: source.match.previous_values });
+    // Restoring a different amount changes financial meaning, so the entry needs fresh review.
+    const restored: Entry = {
+      ...retained,
+      source: source.match.previous_values,
+      review_state: source.match.previous_values.amount === retained.source.amount ? retained.review_state : "unreviewed",
+    };
+    next = addHistory(replaceEntry(next, restored), {
+      at: now,
+      kind: "entry_source_restored",
+      subject_type: "entry",
+      subject_id: retained.id,
+      before: { source: retained.source, review_state: retained.review_state },
+      after: { source: restored.source, review_state: restored.review_state },
+      note: `Reversal of source row ${source.id}`,
+    });
   }
   const created = createImportedEntry(next, source.account_id, source.values, now);
   next = created.store;

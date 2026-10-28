@@ -159,7 +159,13 @@ export const MATCH_BASES = [
 /** Why a source row is linked to its entry. */
 export type MatchBasis = (typeof MATCH_BASES)[number];
 
-export const PROPOSAL_REASONS = ["incoming_not_complete", "incompatible_mapping", "uncertain_coverage", "changed_value"] as const;
+export const PROPOSAL_REASONS = [
+  "incoming_not_complete",
+  "incompatible_mapping",
+  "uncertain_coverage",
+  "changed_value",
+  "source_id_missing",
+] as const;
 /** Why a proposed match needed an explicit decision instead of automatic reuse. */
 export type ProposalReason = (typeof PROPOSAL_REASONS)[number];
 
@@ -209,7 +215,7 @@ export type Entry = {
   readonly created_at: Timestamp;
 };
 
-export type HistoryKind = "plan_confirmed" | "entry_source_replaced" | "source_reuse_reversed";
+export type HistoryKind = "plan_confirmed" | "entry_source_replaced" | "entry_source_restored" | "source_reuse_reversed";
 
 /** Explains an explicit change: what changed, when and from/to what. */
 export type HistoryRecord = {

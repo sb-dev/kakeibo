@@ -8,6 +8,7 @@ import {
   type ImportCoverage,
   type IsoDate,
   type ProposalReason,
+  type SourceValues,
   type Store,
 } from "@kakeibo/domain";
 import type { CommandContext } from "../context.ts";
@@ -43,6 +44,7 @@ const REASON_LABELS: Readonly<Record<ProposalReason, string>> = {
   incompatible_mapping: "earlier coverage used an incompatible mapping",
   uncertain_coverage: "earlier coverage of the date is unknown",
   changed_value: "same date, changed values",
+  source_id_missing: "the row has no source ID; the entry has one",
 };
 
 function findAccount(store: Store, name: string): Account | undefined {
@@ -226,12 +228,23 @@ function missingCount(plan: ImportPlan): number {
 }
 
 type PreviewContext = {
+  readonly store: Store;
   readonly accountName: string;
   readonly account: Account | undefined;
   readonly file: CsvFile;
   readonly mappingLabel: string;
   readonly input: ImportInput;
 };
+
+function describeValues(values: SourceValues): string {
+  return `${values.posted_date} ${values.description} ${signedDisplay(values)}`;
+}
+
+/** "tx_002 2026-10-02 Tesco Stores -£50.00 → 2026-10-02 Tesco Stores -£55.00": what a reuse would replace. */
+function describeReplacement(store: Store, row: RowPlan & { readonly kind: "proposed" }): string {
+  const retained = store.entries.find((entry) => entry.id === row.entry_id);
+  return `${row.entry_id} ${retained === undefined ? "(unknown)" : describeValues(retained.source)} → ${describeValues(row.row.values)}`;
+}
 
 function renderPreview(preview: PreviewContext, plan: ImportPlan): string {
   const { input } = preview;
@@ -288,6 +301,13 @@ function renderPreview(preview: PreviewContext, plan: ImportPlan): string {
         [0, 3],
       ),
     );
+    const changed = proposed.filter((row) => row.reason === "changed_value");
+    if (changed.length > 0) {
+      lines.push("", "Changed values (retained entry → incoming row):");
+      for (const row of changed) {
+        lines.push(`  Row ${row.row.row}: ${describeReplacement(preview.store, row)}`);
+      }
+    }
   }
   if (plan.discrepancies.length > 0) {
     lines.push("", "Flagged dates (existing entries are kept; nothing is deleted):");
@@ -303,7 +323,7 @@ function renderPreview(preview: PreviewContext, plan: ImportPlan): string {
 }
 
 /** One bulk decision, then per-row overrides (Financial Model §10.3). */
-async function askDecisions(context: CommandContext, plan: ImportPlan): Promise<Map<number, Decision>> {
+async function askDecisions(context: CommandContext, store: Store, plan: ImportPlan): Promise<Map<number, Decision>> {
   const proposed = undecidedRows(plan).filter((row) => row.kind === "proposed");
   const bulk = (await context.prompter.select(
     `${proposed.length} row(s) need a decision. Apply which decision to all of them?`,
@@ -318,7 +338,10 @@ async function askDecisions(context: CommandContext, plan: ImportPlan): Promise<
       `Select rows to override (they will ${opposite === "reuse" ? "reuse the proposed entry" : "be kept separate"}); select none to keep the bulk decision`,
       proposed.map((row) => ({
         value: String(row.row.row),
-        name: `Row ${row.row.row} · ${row.row.values.posted_date} · ${row.row.values.description} · ${signedDisplay(row.row.values)} → ${row.entry_id}`,
+        name:
+          row.reason === "changed_value"
+            ? `Row ${row.row.row} · replace ${describeReplacement(store, row)}`
+            : `Row ${row.row.row} · ${row.row.values.posted_date} · ${row.row.values.description} · ${signedDisplay(row.row.values)} → ${row.entry_id}`,
       })),
     ),
   );
@@ -392,11 +415,11 @@ export async function runImport(context: CommandContext, file: string, options: 
     saved !== undefined && sameSettings(settingsOf(saved), settings)
       ? `saved version ${saved.version}`
       : `new version ${(account === undefined ? 0 : store.mappings.filter((mapping) => mapping.account_id === account.id).length) + 1} (saved with this import)`;
-  const preview: PreviewContext = { accountName, account, file: csvFile, mappingLabel, input };
+  const preview: PreviewContext = { store, accountName, account, file: csvFile, mappingLabel, input };
   context.out(renderPreview(preview, plan));
 
   if (undecidedRows(plan).length > 0) {
-    const decisions = await askDecisions(context, plan);
+    const decisions = await askDecisions(context, store, plan);
     plan = planImport(store, input, decisions);
     context.out(renderPreview(preview, plan));
   }

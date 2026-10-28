@@ -114,6 +114,18 @@ describe("import (interactive)", () => {
     expect((await loadStore(paths)).imports[1]?.discrepancies).toHaveLength(2);
   });
 
+  it("shows retained and incoming values for changed-value proposals before any decision", async () => {
+    await importA();
+    const { context, out, prompter } = makeContext([...COMPLETE_OCT_1_10, "reuse", [], true]);
+    await runImport(context, `${FIXTURES}overlap-changed.csv`, { account: "current" });
+    const firstPreview = out.find((line) => line.startsWith("Import preview")) ?? "";
+    expect(firstPreview).toContain("Changed values (retained entry → incoming row):");
+    expect(firstPreview).toContain("  Row 2: tx_002 2026-10-02 Tesco Stores -£50.00 → 2026-10-02 Tesco Stores -£55.00");
+    expect(firstPreview).toContain("  Row 5: tx_005 2026-10-07 Waterstones -£20.00 → 2026-10-07 WATERSTONES LTD -£20.00");
+    expect(prompter.asked.at(-1)).toBe("Import 6 row(s) into 'current' (0 new, 6 reused)?");
+    expect((await loadStore(paths)).entries.find((entry) => entry.id === "tx_002")?.source.amount).toBe(5500);
+  });
+
   it("re-asks a coverage range that excludes rows", async () => {
     const { context, err } = makeContext([...SIGNED_MAPPING, "complete", "2026-10-02", "2026-10-10", "2026-10-01", "2026-10-31", true]);
     await runImport(context, `${FIXTURES}overlap-a.csv`, { account: "current" });
