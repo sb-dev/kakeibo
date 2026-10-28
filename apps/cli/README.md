@@ -2,7 +2,7 @@
 
 Terminal interface for the Kakeibo money-review workflow: plan the month, import CSVs, review spending and reflect. Data stays on your device in one local JSON store.
 
-**Status:** tasks T1–T3 of the [CLI MVP tasks](../../docs/product/cli-mvp-tasks.md) are implemented: `init`, `plan`, `plan --show`, `import`, `review`, `review --show` and `edit`. Summary and spending reports follow in T4. Requirements live in the [CLI MVP PRD](../../docs/product/cli-mvp-prd.md).
+**Status:** tasks T1–T4 of the [CLI MVP tasks](../../docs/product/cli-mvp-tasks.md) are implemented: `init`, `plan`, `plan --show`, `import`, `review`, `review --show`, `edit`, `summary` and `spending`. The documented end-to-end walkthrough follows in T5. Requirements live in the [CLI MVP PRD](../../docs/product/cli-mvp-prd.md).
 
 ## Requirements
 
@@ -36,8 +36,12 @@ kakeibo --help
 | `kakeibo review --week 2026-10-19` | Open or resume the Monday–Sunday review. Needs a terminal. |
 | `kakeibo review --week 2026-10-19 --show` | Show the week's totals, entries, reflection and closure status without prompts. Works when output is redirected. |
 | `kakeibo edit tx_014` | Correct one entry: type, treatment and category, review state, duplicate decision or source reuse. Needs a terminal. |
+| `kakeibo summary --month 2026-10` | Show the month's plan beside observed income and spending, envelope use, Fixed, category totals and unresolved entries. Works when output is redirected. |
+| `kakeibo spending --month 2026-10` | Show spending by treatment and against each month's plan. `--week <monday>` selects a week instead. |
+| `kakeibo spending --month 2026-10 --envelope Needs` | Show Needs spending by category. |
+| `kakeibo spending --month 2026-10 --envelope Needs --category Groceries` | Show the entries behind Needs / Groceries. |
 
-`--month` defaults to the current local month and `--week` to the current local Monday–Sunday week. An explicit `--week` must be a Monday. Every command accepts `--help`. The global `--data-dir <dir>` selects another store directory; the default is `~/.kakeibo`.
+`--month` defaults to the current local month and `--week` to the current local Monday–Sunday week. `spending` defaults to the current local month. An explicit `--week` must be a Monday. Every command accepts `--help`. The global `--data-dir <dir>` selects another store directory; the default is `~/.kakeibo`.
 
 ### Planning a month
 
@@ -146,6 +150,36 @@ An uncertain card settlement can stay Spending / Unclassified, where it remains 
 
 Every saved correction increases the entry's revision and adds a before/after record to the store's history.
 
+### Monthly summary and category spending
+
+`summary` and `spending` only read the store. They never prompt, never take the lock and never change data, so they work when output is redirected. Both use the same calculations as the weekly review:
+
+```text
+net spending = gross spending - refunds
+reviewed remaining = envelope limit - reviewed net spending
+```
+
+`summary --month` shows:
+
+- the plan: planned income, fixed commitments, Savings allocation, flexible budget and intention. A missing plan is labelled;
+- observed income, gross spending, refunds and net spending, each split into reviewed and unreviewed, and income minus net spending. A refund reduces spending and is never income, so it counts once;
+- transfers and excluded duplicates, which are not spending, and Savings-goal contributions, counted once per transfer, beside the planned allocation. An allocation alone is not a contribution;
+- each envelope's limit, reviewed and unreviewed net spending and reviewed remaining, with the flexible total;
+- Fixed against the planned fixed commitments, then Outside plan and Unclassified, separately from the envelopes;
+- spending by category and the counts of unreviewed, Unclassified and duplicate-candidate entries.
+
+`spending` drills down in three levels for a `--month` or a `--week` (not both):
+
+| Options | Shows |
+|---|---|
+| none | Gross, refunds, net, reviewed, unreviewed and entry count per treatment, then the month-to-date envelope comparison for each month the period touches, against that month's plan. |
+| `--envelope <name>` | The same figures per category in that treatment, with a total that matches the summary row, and its limit and reviewed remaining for each month. |
+| `--envelope <name> --category <name>` | Each contributing purchase and refund: ID, posted date, account, description, type, treatment / category, amount and review state. Refunds show as negative amounts, so the column adds up to net spending. Excluded duplicates are listed separately as not counted. |
+
+`--envelope` accepts Fixed, Needs, Wants, Culture, Unexpected, Outside plan and Unclassified, ignoring case. Goal contributions are not spending; `summary` shows them. `--category` needs `--envelope`.
+
+A refund counts in its own posted period, so a later refund never changes an earlier month. Net spending can be negative and reviewed remaining can exceed the limit. Duplicate candidates stay in the unreviewed figures until resolved. A period that contains today is marked **in progress**; a period without entries shows **no imported activity**. Totals describe imported activity only. They are not a bank balance, verified savings or proof that every account is complete.
+
 ## Data directory
 
 | File | Purpose |
@@ -167,7 +201,7 @@ Every error says what went wrong and ends with **No data was changed.** or **Dat
 |---|---|
 | 0 | Success, including "plan not saved" or "import cancelled" after you decline the confirmation, and a file that was already imported. |
 | 1 | The command could not complete (missing store, store exists, lock held, corrupt store, plan does not balance, no terminal, invalid CSV values, conflicting source IDs, unknown entry ID, an entry changed by another process during a prompt). |
-| 2 | Usage error (unknown option, missing `--account`, invalid `--month`, a `--week` that is not a Monday). |
+| 2 | Usage error (unknown option, missing `--account`, invalid `--month`, a `--week` that is not a Monday, `--month` with `--week`, `--category` without `--envelope`, an unknown envelope or category). |
 | 130 | Cancelled with Ctrl+C. |
 
 ## Stale lock

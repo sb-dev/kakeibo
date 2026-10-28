@@ -63,6 +63,10 @@ function add(amounts: SpendingAmounts, entry: Entry): SpendingAmounts {
   };
 }
 
+function addSplit(split: ReviewSplit, entry: Entry): ReviewSplit {
+  return entry.review_state === "reviewed" ? { ...split, reviewed: add(split.reviewed, entry) } : { ...split, unreviewed: add(split.unreviewed, entry) };
+}
+
 /**
  * Gross spending, refunds and net spending per treatment, split by review state.
  * A refund reduces spending in its own treatment and posted period and is never income (§3.3).
@@ -71,11 +75,44 @@ export function spendingTotals(entries: readonly Entry[]): SpendingTotals {
   const totals = Object.fromEntries(TREATMENTS.map((treatment) => [treatment, { reviewed: ZERO, unreviewed: ZERO }])) as Record<Treatment, ReviewSplit>;
   for (const entry of entries) {
     if (!countsAsSpending(entry)) continue;
-    const split = totals[entry.treatment];
-    totals[entry.treatment] =
-      entry.review_state === "reviewed" ? { ...split, reviewed: add(split.reviewed, entry) } : { ...split, unreviewed: add(split.unreviewed, entry) };
+    totals[entry.treatment] = addSplit(totals[entry.treatment], entry);
   }
   return totals;
+}
+
+export type CategorySpending = {
+  readonly category_id: string;
+  readonly split: ReviewSplit;
+};
+
+/**
+ * The same totals for one treatment, by category, in first-seen order. Category totals add up to
+ * the treatment's totals in `spendingTotals`, so a drill-down reconciles with its summary row.
+ */
+export function categorySpendingTotals(entries: readonly Entry[], treatment: Treatment): CategorySpending[] {
+  const totals = new Map<string, ReviewSplit>();
+  for (const entry of entries) {
+    if (!countsAsSpending(entry) || entry.treatment !== treatment) continue;
+    totals.set(entry.category_id, addSplit(totals.get(entry.category_id) ?? { reviewed: ZERO, unreviewed: ZERO }, entry));
+  }
+  return [...totals].map(([category_id, split]) => ({ category_id, split }));
+}
+
+function sumAmounts(a: SpendingAmounts, b: SpendingAmounts): SpendingAmounts {
+  return { gross: addPence(a.gross, b.gross), refunds: addPence(a.refunds, b.refunds), net: addPence(a.net, b.net), count: a.count + b.count };
+}
+
+/** Several splits added together, for example the four envelopes as the flexible total. */
+export function combineSplits(splits: readonly ReviewSplit[]): ReviewSplit {
+  return splits.reduce((total, split) => ({ reviewed: sumAmounts(total.reviewed, split.reviewed), unreviewed: sumAmounts(total.unreviewed, split.unreviewed) }), {
+    reviewed: ZERO,
+    unreviewed: ZERO,
+  });
+}
+
+/** Reviewed and unreviewed amounts together. */
+export function splitTotal(split: ReviewSplit): SpendingAmounts {
+  return sumAmounts(split.reviewed, split.unreviewed);
 }
 
 export type GoalContribution = {

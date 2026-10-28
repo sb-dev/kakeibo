@@ -2,6 +2,7 @@ import {
   ENVELOPES,
   TREATMENT_LABELS,
   addPence,
+  combineSplits,
   currentPlanRevision,
   datesInRange,
   dayOfWeek,
@@ -15,10 +16,9 @@ import {
   monthOf,
   monthSegments,
   monthStartOf,
-  pence,
   reviewStatus,
+  reviewedRemaining,
   spendingTotals,
-  subPence,
   sumPence,
   weekEndOf,
   weekEntries,
@@ -171,14 +171,18 @@ function weekSpending(store: Store, weekStart: IsoDate, entries: readonly Entry[
   return lines;
 }
 
-function monthToDate(store: Store, weekStart: IsoDate, today: IsoDate): string[] {
+/**
+ * Month-to-date envelope comparison for each month the range touches, against that month's plan.
+ * A week that crosses a month end shows both months; a missing plan is labelled.
+ */
+export function monthToDate(store: Store, from: IsoDate, to: IsoDate, today: IsoDate): string[] {
   const lines = ["Month to date (each month against its own plan)"];
-  for (const segment of monthSegments(weekStart, weekEndOf(weekStart))) {
-    const from = monthStartOf(segment.month);
+  for (const segment of monthSegments(from, to)) {
+    const monthStart = monthStartOf(segment.month);
     const plan = currentPlanRevision(store, segment.month);
     const progress = monthOf(today) === segment.month && today <= segment.to ? " (in progress)" : "";
-    const totals = spendingTotals(entriesInRange(store, from, segment.to));
-    lines.push("", `${segment.month}: ${from} to ${segment.to}${progress}`);
+    const totals = spendingTotals(entriesInRange(store, monthStart, segment.to));
+    lines.push("", `${segment.month}: ${monthStart} to ${segment.to}${progress}`);
     if (plan === undefined) {
       lines.push(`  No plan saved for ${segment.month}. Run \`kakeibo plan --month ${segment.month}\` to create one.`);
     } else {
@@ -189,16 +193,10 @@ function monthToDate(store: Store, weekStart: IsoDate, today: IsoDate): string[]
       limit === undefined ? "no plan" : formatPence(limit),
       formatPence(split.reviewed.net),
       formatPence(split.unreviewed.net),
-      limit === undefined ? "—" : formatPence(subPence(limit, split.reviewed.net)),
+      limit === undefined ? "—" : formatPence(reviewedRemaining(limit, split)),
     ];
     const rows = ENVELOPES.map((envelope) => row(TREATMENT_LABELS[envelope], plan?.envelopes[envelope], totals[envelope]));
-    const flexible = ENVELOPES.reduce(
-      (total, envelope) => ({
-        reviewed: { ...total.reviewed, net: addPence(total.reviewed.net, totals[envelope].reviewed.net) },
-        unreviewed: { ...total.unreviewed, net: addPence(total.unreviewed.net, totals[envelope].unreviewed.net) },
-      }),
-      { reviewed: { gross: pence(0), refunds: pence(0), net: pence(0), count: 0 }, unreviewed: { gross: pence(0), refunds: pence(0), net: pence(0), count: 0 } },
-    );
+    const flexible = combineSplits(ENVELOPES.map((envelope) => totals[envelope]));
     rows.push(row("Flexible total", plan === undefined ? undefined : sumPence(ENVELOPES.map((envelope) => plan.envelopes[envelope])), flexible));
     rows.push(row("Fixed", plan?.fixed_commitments, totals.fixed));
     lines.push(
@@ -268,7 +266,7 @@ export function renderWeek(store: Store, weekStart: IsoDate, today: IsoDate): st
     lines.push(renderGrid(["Day", "ID", "Description", "Amount", "Type", "Treatment / category", "Review", "Note"], rows, [3]));
   }
 
-  lines.push("", ...monthToDate(store, weekStart, today));
+  lines.push("", ...monthToDate(store, weekStart, weekEnd, today));
   lines.push(
     "",
     "Reflection",
