@@ -102,6 +102,8 @@ export {
 } from "./store/schema.ts";
 export { createImportedEntry, entryRevision, findEntry, reviseEntry, uncategorisedCategoryId } from "./entries/entries.ts";
 export {
+  categorySpendingTotals,
+  combineSplits,
   compareEntries,
   countsAsSpending,
   entriesInRange,
@@ -109,11 +111,14 @@ export {
   isDuplicateCandidate,
   isExcludedDuplicate,
   spendingTotals,
+  splitTotal,
+  type CategorySpending,
   type GoalContribution,
   type ReviewSplit,
   type SpendingAmounts,
   type SpendingTotals,
 } from "./review/totals.ts";
+export { periodSummary, reviewedRemaining, spendingEntries, type ObservedIncome, type PeriodSummary } from "./reports/summary.ts";
 export { applyEntryCorrection, confirmEntries, type EntryCorrection } from "./review/corrections.ts";
 export { applyDuplicateDecisions, duplicateProblems, restoreDuplicates, type DuplicateDecision } from "./review/duplicates.ts";
 export { goalLinkProblems, linkFor } from "./review/goal-links.ts";

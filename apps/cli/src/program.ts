@@ -4,6 +4,8 @@ import { runImport } from "./commands/import.ts";
 import { runInit } from "./commands/init.ts";
 import { runPlan } from "./commands/plan.ts";
 import { runReview } from "./commands/review.ts";
+import { runSpending } from "./commands/spending.ts";
+import { runSummary } from "./commands/summary.ts";
 import type { CommandContext } from "./context.ts";
 import { inquirerPrompter } from "./prompts/inquirer-prompter.ts";
 import { resolveDataDir, storePaths } from "./storage/paths.ts";
@@ -69,6 +71,25 @@ export function createProgram(createContext: ContextFactory = defaultContextFact
     .option("--show", "display totals, entries, reflection and closure status without prompts")
     .action(async (options: { week?: string; show?: boolean }) => {
       await runReview(context(), options);
+    });
+
+  program
+    .command("summary")
+    .description("Show the month's plan beside observed income and spending, envelope use, category totals and unresolved entries.")
+    .option("--month <YYYY-MM>", "calendar month (default: the current local month)")
+    .action(async (options: { month?: string }) => {
+      await runSummary(context(), options);
+    });
+
+  program
+    .command("spending")
+    .description("Show spending by treatment, then by category within an envelope, then the entries behind one category.")
+    .option("--month <YYYY-MM>", "calendar month (default: the current local month)")
+    .option("--week <YYYY-MM-DD>", "a Monday–Sunday week instead of a month, given by its Monday")
+    .option("--envelope <name>", "Needs, Wants, Culture, Unexpected, Fixed, Outside plan or Unclassified")
+    .option("--category <name>", "a category within --envelope; lists its entries")
+    .action(async (options: { month?: string; week?: string; envelope?: string; category?: string }) => {
+      await runSpending(context(), options);
     });
 
   program

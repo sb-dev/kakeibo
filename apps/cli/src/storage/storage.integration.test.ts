@@ -16,6 +16,8 @@ import {
 import { runEdit } from "../commands/edit.ts";
 import { runImport } from "../commands/import.ts";
 import { runReview } from "../commands/review.ts";
+import { runSpending } from "../commands/spending.ts";
+import { runSummary } from "../commands/summary.ts";
 import type { CommandContext } from "../context.ts";
 import { CliError, CorruptStoreError, LockHeldError, StoreExistsError, StoreMissingError } from "../errors.ts";
 import { scriptedPrompter, type ScriptedAnswer } from "../prompts/prompter.ts";
@@ -363,5 +365,36 @@ describe("weekly reviews", () => {
     await runReview(run(["exit"]).context, { week: WEEK });
     expect((await loadStore(paths)).reviews).toEqual([]);
     expect(await show()).toContain("Review: not closed");
+  });
+});
+
+describe("reports", () => {
+  const fixtures = fileURLToPath(new URL("../../../../fixtures/synthetic-financial-data/csv/", import.meta.url));
+  const mapping: ScriptedAnswer[] = [null, "Date", "YYYY-MM-DD", "Description", "signed", "Amount", "negative", "", "", ""];
+
+  function context(answers: readonly ScriptedAnswer[], interactive: boolean): CommandContext {
+    return { paths, out: () => undefined, err: () => undefined, now: () => new Date(NOW), interactive, prompter: scriptedPrompter(answers) };
+  }
+
+  it("leaves the store and backup byte-identical and takes no lock", async () => {
+    await initStore(paths, NOW);
+    await updateStore(paths, savePrdPlan);
+    await runImport(context([...mapping, "unknown", true], true), `${fixtures}review-week.csv`, { account: "current" });
+    const store = await fs.readFile(paths.store);
+    const backup = await fs.readFile(paths.backup);
+    const files = await listDir();
+
+    // Without a terminal and with no scripted answers: any prompt would throw.
+    await runSummary(context([], false), { month: "2026-10" });
+    await runSummary(context([], false), { month: "2026-11" });
+    await runSpending(context([], false), { month: "2026-10" });
+    await runSpending(context([], false), { week: "2026-10-26" });
+    await runSpending(context([], false), { month: "2026-10", envelope: "Needs" });
+    await runSpending(context([], false), { month: "2026-10", envelope: "Unclassified", category: "Uncategorised" });
+    await expect(runSpending(context([], false), { envelope: "Needs", category: "Books" })).rejects.toBeInstanceOf(CliError);
+
+    expect(await fs.readFile(paths.store)).toEqual(store);
+    expect(await fs.readFile(paths.backup)).toEqual(backup);
+    expect(await listDir()).toEqual(files);
   });
 });
