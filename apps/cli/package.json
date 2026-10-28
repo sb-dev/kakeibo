@@ -8,7 +8,10 @@
   "bin": {
     "kakeibo": "./bin/kakeibo.js"
   },
-  "files": ["bin", "dist"],
+  "files": [
+    "bin",
+    "dist"
+  ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json"
@@ -16,7 +19,8 @@
   "dependencies": {
     "@inquirer/prompts": "8.7.5",
     "@kakeibo/domain": "workspace:*",
-    "commander": "15.0.0"
+    "commander": "15.0.0",
+    "csv-parse": "7.0.3"
   },
   "engines": {
     "node": ">=22.12.0 <23"

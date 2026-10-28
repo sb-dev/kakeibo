@@ -1,0 +1,7 @@
+Date,Description,Amount,Balance
+2026-10-01,Salary ACME LTD,1500.00,1600.00
+2026-10-02,"Tesco Stores, Leeds",-50.00,1550.00
+
+2026-10-03,"Waterstones ""Books""",-20.00,1530.00
+2026-10-05,Transfer to savings,-200.00,1330.00
+2026-10-06,Tesco refund,+10.00,1340.00
