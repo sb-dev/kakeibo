@@ -115,10 +115,8 @@ export function renderSummary(store: Store, month: Month, today: IsoDate): strin
     );
   }
 
-  if (summary.entries.length === 0) {
-    lines.push("", `No imported activity in ${month}.`);
-    return lines.join("\n");
-  }
+  // The plan's envelope limits stay visible beside zero imported spending.
+  if (summary.entries.length === 0) lines.push("", `No imported activity in ${month}.`);
 
   const income = summary.income;
   const overall = splitTotal(summary.overall);
@@ -252,7 +250,7 @@ function renderTreatments(store: Store, summary: PeriodSummary, period: ReportPe
           [1, 2, 3, 4, 5, 6],
         ),
       ),
-      `  Not spending: transfers ${formatPence(summary.transfers.amount)} (${summary.transfers.count}) · Savings-goal contributions ${formatPence(sumPence(summary.contributions.map((contribution) => contribution.amount)))} (${summary.contributions.length}) · excluded duplicates ${summary.excluded_duplicates.length}`,
+      `  Not spending: transfers ${formatPence(summary.transfers.amount)} (${summary.transfers.count}) · Savings-goal contributions, counted once per transfer: reviewed ${countedTotal(summary.contributions, true)} · unreviewed ${countedTotal(summary.contributions, false)} · excluded duplicates ${summary.excluded_duplicates.length}`,
     );
   }
   lines.push("", ...monthToDate(store, period.from, period.to, today));

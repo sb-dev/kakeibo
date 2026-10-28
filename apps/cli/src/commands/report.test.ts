@@ -97,7 +97,7 @@ async function classify(id: string, purpose: Purpose, treatment: Treatment, cate
   });
 }
 
-async function saveOctoberPlan(): Promise<void> {
+async function saveOctoberPlan(month = "2026-10"): Promise<void> {
   await updateStore(paths, (store) => {
     const validated = validatePlan({
       planning_income: pence(50000),
@@ -107,7 +107,7 @@ async function saveOctoberPlan(): Promise<void> {
       intention: "Cook at home",
     });
     if (!validated.ok) throw new Error("fixture must validate");
-    return { store: addPlanRevision(store, "2026-10" as Month, validated.value, NOW.toISOString()).store, result: undefined };
+    return { store: addPlanRevision(store, month as Month, validated.value, NOW.toISOString()).store, result: undefined };
   });
 }
 
@@ -184,9 +184,14 @@ describe("summary", () => {
     expect(november).toContain("Summary for 2026-11 (2026-11-01 to 2026-11-30)\n");
     expect(november).toContain("No plan saved for 2026-11. Run `kakeibo plan --month 2026-11` to create one.");
     expect(november).toMatch(/Needs\s+no plan\s+£0\.00\s+£0\.00\s+—/);
+    await saveOctoberPlan("2026-09");
     const september = await summary("2026-09");
     expect(september).toContain("No imported activity in 2026-09.");
     expect(september).not.toContain("in progress");
+    expect(september).toMatch(/Needs\s+£150\.00\s+£0\.00\s+£0\.00\s+£150\.00/);
+    expect(september).toMatch(/Unexpected\s+£25\.00\s+£0\.00\s+£0\.00\s+£25\.00/);
+    expect(september).toMatch(/Flexible total\s+£300\.00\s+£0\.00\s+£0\.00\s+£300\.00/);
+    expect(september).toMatch(/Fixed\s+£100\.00\s+£0\.00\s+£0\.00\s+£100\.00/);
   });
 
   it("keeps a next-month refund in its posted month: earlier months unchanged, negative net spending allowed", async () => {
@@ -233,6 +238,19 @@ describe("spending", () => {
     expect(groceries).toMatch(/tx_001\s+2026-10-19\s+current\s+Tesco Stores\s+Spending\s+Needs \/ Groceries\s+£50\.00\s+reviewed/);
     expect(groceries).toMatch(/tx_003\s+2026-10-21\s+current\s+Tesco refund\s+Refund\s+Needs \/ Groceries\s+-£10\.00\s+reviewed/);
     expect(groceries).toContain("Total: gross £50.00 · refunds £10.00 · net £40.00 · reviewed £40.00 · unreviewed £0.00 · entries 2");
+  });
+
+  it("keeps reviewed and unreviewed Savings-goal contributions apart, counting a linked pair once", async () => {
+    await prdFixture();
+    await importFile("savings-account.csv", "savings");
+    // tx_004 and tx_010 are both sides of one £200 transfer; only tx_004 is reviewed.
+    await classify("tx_004", "goal_contribution", "goal", "Savings", "reviewed", ["tx_004", "tx_010"]);
+    await classify("tx_010", "goal_contribution", "goal", "Savings", "unreviewed");
+    await addEntry("2026-10-27", 5000, "Transfer to savings");
+    await classify("tx_011", "goal_contribution", "goal", "Savings", "reviewed", ["tx_011"]);
+    const text = await spending({ month: "2026-10" });
+    expect(text).toContain("Savings-goal contributions, counted once per transfer: reviewed £50.00 (1) · unreviewed £200.00 (1)");
+    expect(await summary("2026-10")).toContain("contributions, counted once per transfer: reviewed £50.00 (1) · unreviewed £200.00 (1)");
   });
 
   it("lists excluded duplicates as not counted and keeps duplicate candidates in the unreviewed figures", async () => {
