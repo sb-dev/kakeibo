@@ -61,7 +61,7 @@ pnpm build
 node apps/cli/bin/kakeibo.js --help
 ```
 
-`kakeibo init` creates a local store, `kakeibo plan --month 2026-10` plans a month and `kakeibo import statement.csv --account current` imports posted CSV transactions. Review and reporting commands follow the [CLI MVP tasks](docs/product/cli-mvp-tasks.md). See [`apps/cli/README.md`](apps/cli/README.md) for usage, data files and backup recovery.
+`kakeibo init` creates a local store, `kakeibo plan --month 2026-10` plans a month, `kakeibo import statement.csv --account current` imports posted CSV transactions, `kakeibo review --week 2026-10-19` reviews a week and `kakeibo edit tx_014` corrects one entry. Reporting commands follow the [CLI MVP tasks](docs/product/cli-mvp-tasks.md). See [`apps/cli/README.md`](apps/cli/README.md) for usage, data files and backup recovery.
 
 [Deployment documentation](docs/deployment/README.md) will describe the supported managed-provider architecture. Core tests must use safe fixtures and must not require production banking, advertising, app-store or LLM credentials.
 

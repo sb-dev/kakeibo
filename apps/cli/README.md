@@ -2,7 +2,7 @@
 
 Terminal interface for the Kakeibo money-review workflow: plan the month, import CSVs, review spending and reflect. Data stays on your device in one local JSON store.
 
-**Status:** tasks T1–T2 of the [CLI MVP tasks](../../docs/product/cli-mvp-tasks.md) are implemented: `init`, `plan`, `plan --show` and `import`. Review, summary, spending and edit follow in T3–T4. Requirements live in the [CLI MVP PRD](../../docs/product/cli-mvp-prd.md).
+**Status:** tasks T1–T3 of the [CLI MVP tasks](../../docs/product/cli-mvp-tasks.md) are implemented: `init`, `plan`, `plan --show`, `import`, `review`, `review --show` and `edit`. Summary and spending reports follow in T4. Requirements live in the [CLI MVP PRD](../../docs/product/cli-mvp-prd.md).
 
 ## Requirements
 
@@ -33,8 +33,11 @@ kakeibo --help
 | `kakeibo plan --month 2026-10 --show` | Display the saved plan without prompts. Works when output is redirected. |
 | `kakeibo import statement.csv --account current` | Map columns when needed, preview the rows and confirm the import. Needs a terminal. |
 | `kakeibo import statement.csv --account current --remap` | Ask for the column mapping again, for example after the export format changed. |
+| `kakeibo review --week 2026-10-19` | Open or resume the Monday–Sunday review. Needs a terminal. |
+| `kakeibo review --week 2026-10-19 --show` | Show the week's totals, entries, reflection and closure status without prompts. Works when output is redirected. |
+| `kakeibo edit tx_014` | Correct one entry: type, treatment and category, review state, duplicate decision or source reuse. Needs a terminal. |
 
-`--month` defaults to the current local month. Every command accepts `--help`. The global `--data-dir <dir>` selects another store directory; the default is `~/.kakeibo`.
+`--month` defaults to the current local month and `--week` to the current local Monday–Sunday week. An explicit `--week` must be a Monday. Every command accepts `--help`. The global `--data-dir <dir>` selects another store directory; the default is `~/.kakeibo`.
 
 ### Planning a month
 
@@ -91,7 +94,57 @@ One confirmation saves the account, the mapping, the import record and its entri
 | A changed amount or description on a completely covered date | Proposed as a match for an explicit decision; the preview shows the retained and incoming values. Reusing applies the new values; a changed amount makes the entry unreviewed. |
 | A filtered or partial file, unknown earlier coverage, or a changed mapping | Matches are proposed, not applied. Choose **reuse** or **keep separate** for all of them, then select rows to override. Kept rows that look identical to an existing entry are marked as possible duplicates for review. |
 
-A mapping change is compatible when only the header changed. A different date format, amount layout or sign convention, description column, reference column or use of source IDs makes earlier coverage incompatible. An incorrect reuse can be reversed into a separate unreviewed entry; reversing a changed-amount replacement restores the earlier amount and makes the entry unreviewed. The command for this arrives with `kakeibo edit` in T3.
+A mapping change is compatible when only the header changed. A different date format, amount layout or sign convention, description column, reference column or use of source IDs makes earlier coverage incompatible. An incorrect reuse can be reversed into a separate unreviewed entry with `kakeibo edit`; reversing a changed-amount replacement restores the earlier amount and makes the entry unreviewed.
+
+### Reviewing a week
+
+`review` shows the week, then offers actions until you choose **Exit**. Each confirmed action is saved at once, so an interrupted review resumes where it stopped. Exiting never closes the review.
+
+The report (also printed by `--show`) contains:
+
+- the period, marked **in progress** for the current week, and the closure status: not closed, closed, or **changed since review**;
+- net spending per treatment (Fixed, Needs, Wants, Culture, Unexpected, Outside plan, Unclassified), split into reviewed and unreviewed; refunds reduce spending and are never income;
+- income, transfers and Savings-goal contributions, which are not spending;
+- unresolved (Unclassified) entries and duplicate candidates with the entry each one may duplicate;
+- every entry, grouped by day;
+- month-to-date limits, reviewed and unreviewed spending and reviewed remaining for each month in the week, using that month's plan. A week that crosses a month end shows both months; a missing plan is labelled;
+- the reflection and earlier closures.
+
+Totals describe imported activity only. They are not a bank balance.
+
+| Action | Effect |
+|---|---|
+| Confirm entries | Select entries; the preview shows the count and total. Unclassified entries need explicit acceptance; duplicate candidates cannot be confirmed until resolved. |
+| Classify or correct | Choose the type (spending, refund, income, transfer, Savings-goal contribution or adjustment), the treatment and the category, or create a category. Changing a reviewed entry asks whether to confirm the new classification or leave it unreviewed. |
+| Resolve duplicate candidates | Select candidates, choose **exclude** or **keep both** for all, then select rows to override. The preview shows each retained entry, the count and the amount. An excluded duplicate counts zero and is marked reviewed. |
+| Reverse a duplicate decision | The entry becomes an unreviewed duplicate candidate again. |
+| Add a category | Within any treatment except Unclassified. Names are unique within a treatment. |
+| Write the reflection | Two optional fields: **What stood out?** and **What will you change next week?** |
+| Close the review | Records every entry in the week and its revision. Unresolved entries stay unreviewed. Closing again keeps earlier closures and notes. |
+
+A closed week shows **changed since review** when a later import adds an entry to it or a correction changes one of its entries. The report names those entries.
+
+Type rules:
+
+| Type | Money | Treatments |
+|---|---|---|
+| Spending | out | Fixed, the four envelopes, Outside plan or Unclassified |
+| Refund | in | the same as spending; it reduces that treatment's spending in its posted period |
+| Income | in | Outside plan or Unclassified |
+| Transfer (including a card settlement when the card's purchases are tracked) | in or out | Outside plan |
+| Savings-goal contribution | in or out | Goal |
+| Adjustment | in or out | Outside plan |
+
+An uncertain card settlement can stay Spending / Unclassified, where it remains visible and unresolved. A Savings-goal contribution is always an explicit link. If the other account side of the transfer is imported, choose it when asked: both entries share one link and the contribution counts once. Changing a linked entry to another type removes the link; the other side becomes a transfer.
+
+### Correcting one entry
+
+`edit <entry-id>` shows the entry, its account, values, classification, review state, duplicate decision, Savings-goal link and every source row linked to it (import, file name, row, line, match basis and raw values). It offers the classify, confirm and duplicate actions above for that entry, plus:
+
+- **Mark as a duplicate of another entry**: enter the ID of the entry to keep. An entry cannot duplicate itself, and an exclusion that would leave no retained entry is refused.
+- **Reverse an incorrect source reuse**: the chosen source row gets its own new unreviewed entry; the entry keeps its ID, classification and review state.
+
+Every saved correction increases the entry's revision and adds a before/after record to the store's history.
 
 ## Data directory
 
@@ -113,8 +166,8 @@ Every error says what went wrong and ends with **No data was changed.** or **Dat
 | Exit code | Meaning |
 |---|---|
 | 0 | Success, including "plan not saved" or "import cancelled" after you decline the confirmation, and a file that was already imported. |
-| 1 | The command could not complete (missing store, store exists, lock held, corrupt store, plan does not balance, no terminal, invalid CSV values, conflicting source IDs). |
-| 2 | Usage error (unknown option, missing `--account`, invalid `--month`). |
+| 1 | The command could not complete (missing store, store exists, lock held, corrupt store, plan does not balance, no terminal, invalid CSV values, conflicting source IDs, unknown entry ID, an entry changed by another process during a prompt). |
+| 2 | Usage error (unknown option, missing `--account`, invalid `--month`, a `--week` that is not a Monday). |
 | 130 | Cancelled with Ctrl+C. |
 
 ## Stale lock
@@ -125,7 +178,7 @@ If kakeibo is killed while saving, `store.lock` may remain. The next write fails
 Another kakeibo process (pid 4242 on laptop since 2026-10-28T10:01:02.000Z) holds /home/you/.kakeibo/store.lock. If no kakeibo process is running, delete that file and retry. No data was changed.
 ```
 
-The CLI never removes a lock by itself. Check that no kakeibo process is running (`ps -p 4242` on Linux or macOS), then delete `store.lock` and retry. Reading commands such as `plan --show` do not take the lock.
+The CLI never removes a lock by itself. Check that no kakeibo process is running (`ps -p 4242` on Linux or macOS), then delete `store.lock` and retry. Reading commands such as `plan --show` and `review --show` do not take the lock.
 
 ## Backup recovery
 
@@ -144,8 +197,8 @@ kakeibo plan --month 2026-10 --show
 
 ```sh
 pnpm typecheck   # tsc for both packages
-pnpm test        # vitest: domain unit tests and the CLI storage integration suite
+pnpm test        # vitest: domain unit tests, CLI command tests and the storage integration suite
 pnpm build       # compiles packages/domain, then apps/cli
 ```
 
-`packages/domain` owns money, periods, plan rules, the store schema and new-entry defaults and has no terminal or filesystem code. `apps/cli` owns commands, prompts, CSV parsing, source reconciliation and JSON storage. Tests sit next to the code they cover (`*.test.ts`); the storage suite uses temporary directories and never touches `~/.kakeibo`.
+`packages/domain` owns money, periods, plan rules, classification, review, duplicate and Savings-goal rules, spending totals, the store schema and new-entry defaults and has no terminal or filesystem code. `apps/cli` owns commands, prompts, rendering, CSV parsing, source reconciliation and JSON storage. Tests sit next to the code they cover (`*.test.ts`); the storage suite uses temporary directories and never touches `~/.kakeibo`.
