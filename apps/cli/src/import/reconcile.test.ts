@@ -71,8 +71,10 @@ function entry(store: Store, id: string): Entry {
   return store.entries.find((candidate) => candidate.id === id) as Entry;
 }
 
+/** A changed treatment takes that treatment's first category, so the store stays valid. */
 function withEntry(store: Store, id: string, change: Partial<Entry>): Store {
-  return { ...store, entries: store.entries.map((candidate) => (candidate.id === id ? { ...candidate, ...change } : candidate)) };
+  const category = change.treatment === undefined ? {} : { category_id: store.categories.find((candidate) => candidate.treatment === change.treatment)?.id as string };
+  return { ...store, entries: store.entries.map((candidate) => (candidate.id === id ? { ...candidate, ...category, ...change } : candidate)) };
 }
 
 async function storeWithA(coverage: ImportCoverage = OCTOBER_1_10): Promise<Store> {

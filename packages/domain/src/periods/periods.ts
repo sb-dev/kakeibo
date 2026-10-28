@@ -89,3 +89,64 @@ export function weekStartOf(date: IsoDate): IsoDate {
   utc.setUTCDate(utc.getUTCDate() - offset);
   return `${utc.getUTCFullYear()}-${pad2(utc.getUTCMonth() + 1)}-${pad2(utc.getUTCDate())}` as IsoDate;
 }
+
+function toUtc(date: IsoDate): Date {
+  const [year, month, day] = date.split("-").map((part) => Number.parseInt(part, 10)) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function fromUtc(utc: Date): IsoDate {
+  return `${utc.getUTCFullYear()}-${pad2(utc.getUTCMonth() + 1)}-${pad2(utc.getUTCDate())}` as IsoDate;
+}
+
+/** The calendar date `days` after (or before, when negative) the given date. */
+export function addDays(date: IsoDate, days: number): IsoDate {
+  const utc = toUtc(date);
+  utc.setUTCDate(utc.getUTCDate() + days);
+  return fromUtc(utc);
+}
+
+/** The Sunday that ends the week starting on the given Monday. */
+export function weekEndOf(weekStart: IsoDate): IsoDate {
+  return addDays(weekStart, 6);
+}
+
+/** Every calendar date from `from` to `to`, inclusive. */
+export function datesInRange(from: IsoDate, to: IsoDate): IsoDate[] {
+  const dates: IsoDate[] = [];
+  for (let date = from; date <= to; date = addDays(date, 1)) {
+    dates.push(date);
+  }
+  return dates;
+}
+
+/** The first day of a month. */
+export function monthStartOf(month: Month): IsoDate {
+  return `${month}-01` as IsoDate;
+}
+
+/** The last day of a month, including 29 February in leap years. */
+export function monthEndOf(month: Month): IsoDate {
+  const [year, monthNumber] = month.split("-").map((part) => Number.parseInt(part, 10)) as [number, number];
+  return `${month}-${pad2(daysInMonth(year, monthNumber))}` as IsoDate;
+}
+
+/** The part of an inclusive date range that falls in one calendar month. */
+export type MonthSegment = {
+  readonly month: Month;
+  readonly from: IsoDate;
+  readonly to: IsoDate;
+};
+
+/** Split an inclusive date range by calendar month, in order. A week spans at most two months. */
+export function monthSegments(from: IsoDate, to: IsoDate): MonthSegment[] {
+  const segments: MonthSegment[] = [];
+  let start = from;
+  while (start <= to) {
+    const month = monthOf(start);
+    const end = monthEndOf(month) < to ? monthEndOf(month) : to;
+    segments.push({ month, from: start, to: end });
+    start = addDays(end, 1);
+  }
+  return segments;
+}
