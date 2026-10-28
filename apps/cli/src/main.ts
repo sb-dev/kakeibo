@@ -3,6 +3,11 @@ import { CliError, EXIT_CODES } from "./errors.ts";
 import { createProgram } from "./program.ts";
 
 const program = createProgram().exitOverride();
+// Subcommands copy settings when created, so they need the override too; otherwise their usage
+// errors exit directly with code 1 and without the data-change statement.
+for (const command of program.commands) {
+  command.exitOverride();
+}
 
 try {
   await program.parseAsync(process.argv);
