@@ -2,12 +2,20 @@
 
 Terminal interface for the Kakeibo money-review workflow: plan the month, import CSVs, review spending and reflect. Data stays on your device in one local JSON store.
 
-**Status:** tasks T1–T4 of the [CLI MVP tasks](../../docs/product/cli-mvp-tasks.md) are implemented: `init`, `plan`, `plan --show`, `import`, `review`, `review --show`, `edit`, `summary` and `spending`. The documented end-to-end walkthrough follows in T5. Requirements live in the [CLI MVP PRD](../../docs/product/cli-mvp-prd.md).
+**Status:** every command in the [CLI MVP tasks](../../docs/product/cli-mvp-tasks.md) is implemented: `init`, `plan`, `plan --show`, `import`, `review`, `review --show`, `edit`, `summary` and `spending`. The [walkthrough record](../../docs/product/cli-mvp-walkthrough.md) shows one complete run with the commands, prompt answers, expected and observed totals, the Node.js version and the operating system. Requirements live in the [CLI MVP PRD](../../docs/product/cli-mvp-prd.md).
+
+## Scope and limits
+
+- **GBP and personal accounts only.** Every amount is recorded in pounds and pence. A currency column must contain `GBP`; other currencies are rejected, not converted. One person, any number of named personal accounts. Business accounting, splits and projections are out of scope.
+- **Generic CSV only.** The CLI reads the [generic CSV format](#importing-a-csv-file) below. No named bank's export has been checked, so compatibility with a bank is not claimed until its format has been tested with a synthetic file in that layout.
+- **Imported activity only.** Totals describe the rows you imported. They are not a bank balance, verified savings or proof that every account is complete. Coverage is only what you declare at import.
+- **Plain-text storage.** The store is a readable JSON file on your device. It is not encrypted, nothing is sent anywhere, and there is no telemetry. See [Data directory](#data-directory).
+- **Deferred.** AI, bank connections, several goals, automatic categorisation and a mobile or web interface are not part of this release.
 
 ## Requirements
 
-- Node.js 22 LTS (`>=22.12.0 <23`).
-- pnpm 10 (`corepack enable` picks up the pinned version from `package.json`).
+- Node.js 22 LTS (`>=22.12.0 <23`). Verified with v22.22.0 on Ubuntu 24.04.
+- pnpm 10 (`corepack enable` picks up the pinned version from `package.json`). Verified with 10.28.0.
 
 ## Run from source
 
@@ -17,12 +25,15 @@ pnpm build
 node apps/cli/bin/kakeibo.js --help
 ```
 
-To call it as `kakeibo`, link the package once after building:
+To call it as `kakeibo`, link the package once after building. Run the link command inside `apps/cli`; `pnpm --filter … link` is not supported by pnpm 10.
 
 ```sh
-pnpm --filter @kakeibo/cli link --global
-kakeibo --help
+cd apps/cli
+pnpm link --global
+kakeibo --version   # 0.1.0
 ```
+
+`pnpm link --global` needs pnpm's global bin directory on your `PATH`. If pnpm reports that it is not, run `pnpm setup`, open a new shell and link again. Rebuild with `pnpm build` after pulling changes; the link points at the compiled `dist`.
 
 ## Commands
 
@@ -58,7 +69,15 @@ Each confirmed plan is stored as a new revision. Earlier revisions are kept, and
 
 ### Importing a CSV file
 
-`import` reads posted transactions from a UTF-8 CSV file with a header row. Quoted fields and blank lines are accepted. The [synthetic fixtures](../../fixtures/synthetic-financial-data/csv/README.md) show the supported layouts.
+`import` reads posted transactions from a UTF-8 CSV file with a header row. Quoted fields and blank lines are accepted. The generic format is one posted transaction per row:
+
+```csv
+Date,Description,Amount
+2026-10-19,Tesco Stores,-50.00
+2026-10-21,Tesco refund,10.00
+```
+
+The [synthetic fixtures](../../fixtures/synthetic-financial-data/csv/README.md) show every supported layout, including debit/credit columns, semicolons and `DD/MM/YYYY` dates.
 
 | Setting | Supported values |
 |---|---|
@@ -236,3 +255,5 @@ pnpm build       # compiles packages/domain, then apps/cli
 ```
 
 `packages/domain` owns money, periods, plan rules, classification, review, duplicate and Savings-goal rules, spending totals, the store schema and new-entry defaults and has no terminal or filesystem code. `apps/cli` owns commands, prompts, rendering, CSV parsing, source reconciliation and JSON storage. Tests sit next to the code they cover (`*.test.ts`); the storage suite uses temporary directories and never touches `~/.kakeibo`.
+
+Release evidence is the automated checks above plus the documented [CLI walkthrough](../../docs/product/cli-mvp-walkthrough.md), run in a temporary data directory with the synthetic fixtures. Repeat it after a change that touches more than one command.
