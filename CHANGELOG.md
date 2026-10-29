@@ -13,6 +13,8 @@
 
 ### CLI MVP
 
+- Removed the project's Node.js version restrictions and strict engine enforcement; CI continues to run on Node.js 22.
+
 - Added the pnpm workspace with `packages/domain` and `apps/cli` (T1 of the CLI MVP tasks).
 - Added `kakeibo init`, `kakeibo plan` and `kakeibo plan --show` with a versioned local JSON store, atomic saves, `store.json.bak` and single-writer locking.
 - Added a GitHub Actions job for type checking, tests and compilation.

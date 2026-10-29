@@ -51,7 +51,7 @@ See [Architecture §3](docs/specs/05-system-architecture-and-data-spec.md#3-adop
 
 ## Getting started
 
-Start with the [product specification](docs/specs/01-product-and-ux-spec.md), [specification index](docs/specs/README.md) and [roadmap](docs/product/roadmap.md). The first executable slice is the CLI MVP (`apps/cli` and `packages/domain`). It needs Node.js 22 LTS (`>=22.12.0 <23`) and pnpm 10.
+Start with the [product specification](docs/specs/01-product-and-ux-spec.md), [specification index](docs/specs/README.md) and [roadmap](docs/product/roadmap.md). The first executable slice is the CLI MVP (`apps/cli` and `packages/domain`). It needs Node.js and pnpm 10. CI runs on Node.js 22; the project does not enforce a Node.js version.
 
 ```sh
 pnpm install
