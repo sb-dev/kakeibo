@@ -15,8 +15,5 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json"
-  },
-  "engines": {
-    "node": ">=22.12.0 <23"
   }
 }

@@ -14,7 +14,7 @@ Terminal interface for the Kakeibo money-review workflow: plan the month, import
 
 ## Requirements
 
-- Node.js 22 LTS (`>=22.12.0 <23`). Verified with v22.22.0 on Ubuntu 24.04.
+- Node.js. CI runs on Node.js 22; the project does not enforce a Node.js version. The walkthrough was verified with v22.22.0 on Ubuntu 24.04.
 - pnpm 10 (`corepack enable` picks up the pinned version from `package.json`). Verified with 10.28.0.
 
 ## Run from source
